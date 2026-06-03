@@ -6,14 +6,26 @@ import type { Database } from "./types";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-  throw new Error(
+// Whether the app is correctly configured to talk to Supabase. Consumers should
+// check this before invoking functions and surface a friendly error.
+export const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
+
+if (!isSupabaseConfigured) {
+  // Do NOT throw at module load: a top-level throw escapes React error
+  // boundaries and renders a blank white page. Log instead and let the UI
+  // degrade gracefully when a request is attempted.
+  console.error(
     "Missing Supabase configuration. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY."
   );
 }
 
+// Use harmless placeholders when unconfigured so createClient does not throw;
+// requests will fail with a handled error surfaced to the user instead.
+const url = SUPABASE_URL || "https://placeholder.supabase.co";
+const key = SUPABASE_PUBLISHABLE_KEY || "placeholder-anon-key";
+
 // This app does not use end-user login/session state, so do not persist auth tokens.
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+export const supabase = createClient<Database>(url, key, {
   auth: {
     persistSession: false,
     autoRefreshToken: false,

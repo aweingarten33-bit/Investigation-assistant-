@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 import mammoth from "mammoth";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { UploadZone } from "@/components/UploadZone";
 import { AnalysisResults } from "@/components/AnalysisResults";
@@ -23,7 +23,9 @@ const Index = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeStep, setAnalyzeStep] = useState<0 | 1 | 2>(0);
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const abortRef = useRef(false);
+  // Monotonic run id: each analysis gets a unique id so a stale async run
+  // (after cancel/reset) can never stomp the state of a newer run.
+  const runIdRef = useRef(0);
 
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
@@ -37,13 +39,20 @@ const Index = () => {
     setFileSize(null);
     setIsSample(false);
     setResult(null);
-    abortRef.current = true;
+    runIdRef.current++; // invalidate any in-flight analysis
     setIsAnalyzing(false);
     setAnalyzeStep(0);
   }, []);
 
   const handleFileSelect = useCallback(async (file: File) => {
+    const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     if (!file.name.endsWith(".docx")) {
+      toast.error("Only .docx files are supported.");
+      return;
+    }
+    // Defense-in-depth: reject files whose MIME type contradicts the .docx
+    // extension (a renamed payload). Empty type is allowed (some OSes omit it).
+    if (file.type && file.type !== DOCX_MIME) {
       toast.error("Only .docx files are supported.");
       return;
     }
@@ -81,7 +90,7 @@ const Index = () => {
   }, []);
 
   const handleCancel = useCallback(() => {
-    abortRef.current = true;
+    runIdRef.current++; // invalidate the in-flight analysis
     setIsAnalyzing(false);
     setAnalyzeStep(0);
     toast.info("Analysis cancelled.");
@@ -101,7 +110,12 @@ const Index = () => {
       return;
     }
 
-    abortRef.current = false;
+    if (!isSupabaseConfigured) {
+      toast.error("Service is not configured. Please contact the administrator.");
+      return;
+    }
+
+    const myRunId = ++runIdRef.current;
     setIsAnalyzing(true);
     setResult(null);
     setAnalyzeStep(1);
@@ -110,17 +124,18 @@ const Index = () => {
       const { data: classifyData, error: classifyError } = await supabase.functions.invoke("analyze-report", {
         body: { reportText: trimmedReportText, step: "classify" },
       });
-      if (abortRef.current) return;
+      if (runIdRef.current !== myRunId) return;
       if (classifyError) throw classifyError;
       if (classifyData.error) throw new Error(classifyData.error);
 
       const classification = classifyData.classification;
+      const signature = classifyData.signature;
       setAnalyzeStep(2);
 
       const { data: reportData, error: reportError } = await supabase.functions.invoke("analyze-report", {
-        body: { reportText: trimmedReportText, step: "report", classification },
+        body: { reportText: trimmedReportText, step: "report", classification, signature },
       });
-      if (abortRef.current) return;
+      if (runIdRef.current !== myRunId) return;
       if (reportError) throw reportError;
       if (reportData.error) throw new Error(reportData.error);
 
@@ -131,11 +146,11 @@ const Index = () => {
       toast.success("Analysis complete — report generated.");
       setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 100);
     } catch (e: any) {
-      if (!abortRef.current) {
+      if (runIdRef.current === myRunId) {
         toast.error(e.message || "Analysis failed. Please try again.");
       }
     } finally {
-      if (!abortRef.current) {
+      if (runIdRef.current === myRunId) {
         setIsAnalyzing(false);
         setAnalyzeStep(0);
       }
@@ -144,8 +159,12 @@ const Index = () => {
 
   const handleExport = useCallback(async () => {
     if (!result) return;
-    await exportToDocx(result);
-    toast.success("Word document exported successfully.");
+    try {
+      await exportToDocx(result);
+      toast.success("Word document exported successfully.");
+    } catch {
+      toast.error("Failed to export Word document. Please try again.");
+    }
   }, [result]);
 
   const hasContent = reportText.trim().length > 0;

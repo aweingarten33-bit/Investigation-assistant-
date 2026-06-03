@@ -11,7 +11,10 @@ function getAllowedOrigin(req: Request): string {
   // Otherwise allow all origins so the app works before production hardening.
   // Set ALLOWED_ORIGINS=https://your-app.vercel.app in Supabase Edge Function secrets.
   if (configured?.length) {
-    return configured.includes(origin) ? origin : configured[0];
+    // Reflect the request origin only when it is explicitly allowed.
+    // For unrecognized origins return "null" so browsers reject the response
+    // and caches (Vary: Origin) never serve an allowed origin's headers to others.
+    return configured.includes(origin) ? origin : "null";
   }
   return "*";
 }
@@ -28,6 +31,79 @@ function corsHeadersFor(req: Request) {
 }
 
 const MAX_REPORT_TEXT_LENGTH = 100_000;
+const MAX_BODY_BYTES = MAX_REPORT_TEXT_LENGTH * 4 + 16_384; // generous headroom over the text limit
+
+// ─── Rate limiting (best-effort, per-instance) ──────────────────────────────
+// Edge instances are not shared, so this is a mitigation, not a hard guarantee.
+// For strong limits, enforce at the gateway (Supabase function rate limits / WAF).
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 20;
+const rateBuckets = new Map<string, number[]>();
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const hits = (rateBuckets.get(ip) ?? []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  hits.push(now);
+  rateBuckets.set(ip, hits);
+  return hits.length > RATE_LIMIT_MAX;
+}
+
+// ─── Classification integrity (HMAC) ─────────────────────────────────────────
+// The classification from step 1 round-trips through the client into step 2.
+// We sign it server-side so a tampered classification (e.g. a forged
+// recommendationTier) is rejected before it can shape the report prompt.
+const SIGNING_SECRET =
+  Deno.env.get("CLASSIFICATION_SIGNING_SECRET") || Deno.env.get("ANTHROPIC_API_KEY") || "";
+
+const VALID_DECISIONS = ["substantiated", "unsubstantiated", "needs_more_info"];
+const VALID_RISK = ["low", "moderate", "high", "critical"];
+const VALID_TIERS = ["re-education", "written_warning", "consider_termination", "recommend_termination"];
+
+// Canonical, key-sorted JSON so client and server hash identical bytes.
+function canonicalize(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalize).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value as Record<string, unknown>)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${canonicalize((value as Record<string, unknown>)[k])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+async function signClassification(classification: unknown): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(SIGNING_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(canonicalize(classification)));
+  return btoa(String.fromCharCode(...new Uint8Array(sig)));
+}
+
+// Constant-time string comparison.
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+// Type/enum validation as defense-in-depth against prompt injection and crashes.
+function isValidClassificationShape(c: any): boolean {
+  return (
+    c && typeof c === "object" &&
+    typeof c.decision === "string" && VALID_DECISIONS.includes(c.decision) &&
+    typeof c.riskLevel === "string" && VALID_RISK.includes(c.riskLevel) &&
+    typeof c.recommendationTier === "string" && VALID_TIERS.includes(c.recommendationTier) &&
+    typeof c.violationType === "string" &&
+    typeof c.violationCount === "string" &&
+    Array.isArray(c.aggravatingFactors) &&
+    Array.isArray(c.mitigatingFactors)
+  );
+}
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -200,6 +276,24 @@ serve(async (req) => {
     });
   }
 
+  // Best-effort rate limiting by client IP.
+  const clientIp = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || "unknown";
+  if (isRateLimited(clientIp)) {
+    return new Response(JSON.stringify({ error: "Too many requests. Please slow down." }), {
+      status: 429,
+      headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": "60" },
+    });
+  }
+
+  // Reject oversized bodies before buffering/parsing them into memory.
+  const contentLength = Number(req.headers.get("content-length") || 0);
+  if (contentLength > MAX_BODY_BYTES) {
+    return new Response(JSON.stringify({ error: "Request body is too large." }), {
+      status: 413,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     let payload: any;
     try {
@@ -240,13 +334,34 @@ serve(async (req) => {
       );
       classification.confidenceScore = Math.max(0, Math.min(100, Number(classification.confidenceScore) || 0));
       console.log("Classification:", JSON.stringify(classification));
-      return new Response(JSON.stringify({ classification }), {
+      // Sign so step 2 can verify the classification was not tampered with client-side.
+      const signature = await signClassification(classification);
+      return new Response(JSON.stringify({ classification, signature }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (step === "report" && prevClassification && typeof prevClassification === "object") {
       console.log("Step 2: Generating report...");
+
+      // Defense-in-depth: reject malformed/adversarial classification shapes
+      // (prevents TypeError crashes and prompt-injection via unexpected fields).
+      if (!isValidClassificationShape(prevClassification)) {
+        return new Response(JSON.stringify({ error: "Invalid classification payload." }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Integrity check: the classification must carry a valid server signature.
+      const expectedSig = await signClassification(prevClassification);
+      if (typeof payload.signature !== "string" || !timingSafeEqual(payload.signature, expectedSig)) {
+        return new Response(JSON.stringify({ error: "Classification failed integrity check." }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       const reportPrompt = buildReportPrompt(prevClassification);
       const report = await callClaudeStructured(
         ANTHROPIC_API_KEY,

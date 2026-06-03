@@ -27,14 +27,11 @@ export function UploadZone({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [mode, setMode] = useState<InputMode>(fileName ? "upload" : "paste");
 
-  // Sync mode when sample is loaded (always show paste tab)
+  // Sync the active tab to the current input state. A loaded file shows the
+  // upload tab; otherwise (including after Clear or loading a sample) default
+  // back to the paste tab. fileName is the single decider to avoid conflicts.
   useEffect(() => {
-    if (isSample && pastedText) {
-      setMode("paste");
-    }
-    if (fileName) {
-      setMode("upload");
-    }
+    setMode(fileName ? "upload" : "paste");
   }, [isSample, pastedText, fileName]);
 
   // Auto-expand textarea
