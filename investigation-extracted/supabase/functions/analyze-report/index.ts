@@ -48,6 +48,36 @@ function isRateLimited(ip: string): boolean {
   return hits.length > RATE_LIMIT_MAX;
 }
 
+// Read the request body while enforcing a hard byte cap. Unlike a Content-Length
+// check, this also bounds chunked/streamed bodies (no header, or a spoofed one):
+// we abort as soon as the accumulated bytes exceed the limit. Returns null when
+// the body is too large.
+async function readBodyWithLimit(req: Request, limit: number): Promise<string | null> {
+  if (!req.body) return "";
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) {
+      total += value.byteLength;
+      if (total > limit) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  }
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    merged.set(c, offset);
+    offset += c.byteLength;
+  }
+  return new TextDecoder().decode(merged);
+}
+
 // ─── Classification integrity (HMAC) ─────────────────────────────────────────
 // The classification from step 1 round-trips through the client into step 2.
 // We sign it server-side so a tampered classification (e.g. a forged
@@ -285,9 +315,9 @@ serve(async (req) => {
     });
   }
 
-  // Reject oversized bodies before buffering/parsing them into memory.
-  const contentLength = Number(req.headers.get("content-length") || 0);
-  if (contentLength > MAX_BODY_BYTES) {
+  // Fast reject for honest clients that advertise an oversized Content-Length.
+  const contentLength = Number(req.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
     return new Response(JSON.stringify({ error: "Request body is too large." }), {
       status: 413,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -295,9 +325,19 @@ serve(async (req) => {
   }
 
   try {
+    // Enforce the byte cap while streaming, so chunked/headerless bodies
+    // cannot exhaust memory by buffering before the text-length check.
+    const rawBody = await readBodyWithLimit(req, MAX_BODY_BYTES);
+    if (rawBody === null) {
+      return new Response(JSON.stringify({ error: "Request body is too large." }), {
+        status: 413,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     let payload: any;
     try {
-      payload = await req.json();
+      payload = JSON.parse(rawBody);
     } catch {
       return new Response(JSON.stringify({ error: "Invalid JSON request body" }), {
         status: 400,
