@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@layer base {
+  :root {
+    --background: 218 28% 88%;
+    --foreground: 220 40% 7%;
+    --card: 218 28% 90%;
+    --card-foreground: 220 40% 7%;
+    --popover: 218 28% 90%;
+    --popover-foreground: 220 40% 7%;
+    --primary: 217 91% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 218 25% 85%;
+    --secondary-foreground: 220 40% 7%;
+    --muted: 218 22% 82%;
+    --muted-foreground: 215 18% 38%;
+    --accent: 217 91% 94%;
+    --accent-foreground: 217 91% 35%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 71% 35%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 44%;
+    --warning-foreground: 0 0% 100%;
+    --border: 218 20% 78%;
+    --input: 218 25% 82%;
+    --ring: 217 91% 53%;
+    --radius: 0.625rem;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer utilities {
+  .fade-in {
+    animation: fadeIn 200ms ease-out;
+  }
+
+  .neu-raised {
+    box-shadow:
+      8px 8px 16px hsl(218 28% 78%),
+      -8px -8px 16px hsl(218 20% 98%);
+    border: 1px solid hsl(218 20% 92% / 0.5);
+  }
+
+  .neu-inset {
+    box-shadow:
+      inset 4px 4px 8px hsl(218 28% 78%),
+      inset -4px -4px 8px hsl(218 20% 98%);
+  }
+
+  .neu-button {
+    box-shadow:
+      6px 6px 12px hsl(218 28% 76%),
+      -6px -6px 12px hsl(218 20% 98%);
+    border: 1px solid hsl(218 20% 92% / 0.3);
+  }
+
+  .neu-button:hover {
+    box-shadow:
+      8px 8px 16px hsl(218 28% 74%),
+      -8px -8px 16px hsl(218 20% 99%);
+  }
+
+  .neu-button:active {
+    box-shadow:
+      inset 3px 3px 6px hsl(218 28% 76%),
+      inset -3px -3px 6px hsl(218 20% 98%);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 1.5s ease-in-out infinite;
+}
