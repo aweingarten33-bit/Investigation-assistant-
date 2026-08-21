@@ -6,7 +6,10 @@ export class HttpError extends Error {
 }
 
 function model() {
-  return process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+  // "claude-sonnet-4-6" (the old default here) isn't a real model ID — it
+  // was never actually exercised against a live key before now, which is
+  // exactly the 400 this replaces.
+  return process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 }
 
 // Structured output via forced tool-use — used by analyze-report for the

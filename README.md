@@ -42,7 +42,7 @@ host's dashboard). None of them are needed by the frontend build.
 
 ```sh
 ANTHROPIC_API_KEY=your_anthropic_key        # required
-ANTHROPIC_MODEL=claude-sonnet-4-20250514    # optional, has a default
+ANTHROPIC_MODEL=claude-sonnet-5             # optional, has a default
 CLASSIFICATION_SIGNING_SECRET=...           # optional, falls back to ANTHROPIC_API_KEY
 PORT=3000                                   # optional, Render sets this itself
 ```
