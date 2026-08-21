@@ -107,7 +107,7 @@ export function ClassificationSummary({ classification, sources }: { classificat
           <ul className="space-y-1">
             {sources.map((s, i) => (
               <li key={i} className="text-xs truncate">
-                <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2 hover:text-primary/80">
                   {s.title}
                 </a>
               </li>
