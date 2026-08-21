@@ -6,30 +6,34 @@
 
 @layer base {
   :root {
-    --background: 218 28% 88%;
-    --foreground: 220 40% 7%;
-    --card: 218 28% 90%;
-    --card-foreground: 220 40% 7%;
-    --popover: 218 28% 90%;
-    --popover-foreground: 220 40% 7%;
-    --primary: 217 91% 53%;
+    /* Apple-system-inspired: grouped light grey background, white cards,
+       a systemBlue accent, near-black text. -apple-system in the font
+       stack renders as actual SF Pro on Apple devices; Inter is the
+       fallback everywhere else. */
+    --background: 240 20% 97%;
+    --foreground: 240 6% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 6% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 6% 12%;
+    --primary: 211 100% 45%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 218 25% 85%;
-    --secondary-foreground: 220 40% 7%;
-    --muted: 218 22% 82%;
-    --muted-foreground: 215 18% 38%;
-    --accent: 217 91% 94%;
-    --accent-foreground: 217 91% 35%;
-    --destructive: 0 72% 51%;
+    --secondary: 240 10% 94%;
+    --secondary-foreground: 240 6% 12%;
+    --muted: 240 10% 95%;
+    --muted-foreground: 240 5% 42%;
+    --accent: 211 100% 96%;
+    --accent-foreground: 211 100% 38%;
+    --destructive: 4 90% 58%;
     --destructive-foreground: 0 0% 100%;
-    --success: 142 71% 35%;
+    --success: 142 69% 42%;
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 44%;
+    --warning: 35 100% 48%;
     --warning-foreground: 0 0% 100%;
-    --border: 218 20% 78%;
-    --input: 218 25% 82%;
-    --ring: 217 91% 53%;
-    --radius: 0.625rem;
+    --border: 240 8% 88%;
+    --input: 240 8% 88%;
+    --ring: 211 100% 45%;
+    --radius: 0.875rem;
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -48,7 +52,9 @@
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 }
 
@@ -57,36 +63,35 @@
     animation: fadeIn 200ms ease-out;
   }
 
+  /* Elevated surface (cards, the main container) — a soft, single-source
+     ambient shadow plus a hairline border, not an embossed/inset pair. */
   .neu-raised {
     box-shadow:
-      8px 8px 16px hsl(218 28% 78%),
-      -8px -8px 16px hsl(218 20% 98%);
-    border: 1px solid hsl(218 20% 92% / 0.5);
+      0 1px 2px hsl(240 10% 10% / 0.04),
+      0 12px 32px -12px hsl(240 10% 10% / 0.12);
+    border: 1px solid hsl(var(--border) / 0.7);
   }
 
+  /* Recessed surface (inputs, drop zones, tab tracks) — a faint inner
+     shadow reads as "sunken" without the heavy dual-tone bevel. */
   .neu-inset {
-    box-shadow:
-      inset 4px 4px 8px hsl(218 28% 78%),
-      inset -4px -4px 8px hsl(218 20% 98%);
+    box-shadow: inset 0 1px 3px hsl(240 10% 10% / 0.06);
+    border: 1px solid hsl(var(--border) / 0.8);
   }
 
   .neu-button {
-    box-shadow:
-      6px 6px 12px hsl(218 28% 76%),
-      -6px -6px 12px hsl(218 20% 98%);
-    border: 1px solid hsl(218 20% 92% / 0.3);
+    box-shadow: 0 1px 2px hsl(240 10% 10% / 0.06);
+    transition: box-shadow 150ms ease, transform 150ms ease;
   }
 
   .neu-button:hover {
-    box-shadow:
-      8px 8px 16px hsl(218 28% 74%),
-      -8px -8px 16px hsl(218 20% 99%);
+    box-shadow: 0 4px 14px -4px hsl(240 10% 10% / 0.18);
+    transform: translateY(-1px);
   }
 
   .neu-button:active {
-    box-shadow:
-      inset 3px 3px 6px hsl(218 28% 76%),
-      inset -3px -3px 6px hsl(218 20% 98%);
+    box-shadow: 0 1px 2px hsl(240 10% 10% / 0.08);
+    transform: translateY(0);
   }
 }
 
