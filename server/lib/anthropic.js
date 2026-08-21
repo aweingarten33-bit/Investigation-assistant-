@@ -12,6 +12,25 @@ function model() {
   return process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 }
 
+// Anthropic's error bodies are small, safe-to-show validation messages
+// (e.g. "model: claude-x not found", "x-api-key header is required") — not
+// sensitive. Surfacing the real reason directly beats a bare status code,
+// which was the whole reason "AI analysis failed (400)" wasn't diagnosable
+// without digging through server logs.
+function describeAnthropicError(status, rawText) {
+  try {
+    const parsed = JSON.parse(rawText);
+    const msg = parsed?.error?.message;
+    if (typeof msg === "string" && msg.trim()) {
+      return `Anthropic error (${status}): ${msg.slice(0, 300)}`;
+    }
+  } catch {
+    // not JSON — fall through to the raw-text version below
+  }
+  const trimmed = rawText.trim();
+  return trimmed ? `Anthropic error (${status}): ${trimmed.slice(0, 300)}` : `AI request failed (${status})`;
+}
+
 // Structured output via forced tool-use — used by analyze-report for the
 // classify/report steps, which need a validated JSON shape back.
 export async function callClaudeStructured(apiKey, systemPrompt, userMessage, schema, toolName) {
@@ -40,7 +59,7 @@ export async function callClaudeStructured(apiKey, systemPrompt, userMessage, sc
     const text = await response.text();
     console.error("Anthropic API error:", response.status, text);
     throw new HttpError(
-      `AI analysis failed (${response.status})`,
+      describeAnthropicError(response.status, text),
       response.status === 429 ? 429 : response.status === 529 ? 503 : 502,
     );
   }
@@ -75,7 +94,7 @@ export async function callClaudeText(apiKey, systemPrompt, userMessage) {
     const text = await response.text();
     console.error("Anthropic API error:", response.status, text);
     throw new HttpError(
-      `AI request failed (${response.status})`,
+      describeAnthropicError(response.status, text),
       response.status === 429 ? 429 : response.status === 529 ? 503 : 502,
     );
   }
