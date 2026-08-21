@@ -5,6 +5,7 @@ import {
   Gavel, Lightbulb, Mail, Send, RotateCcw, ArrowLeft
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DISCIPLINE_LEVELS } from "@/lib/discipline-levels";
 
 type WizardStep = "start" | "determination" | "determination-detail" | "compliance-check" | "intent" | "discipline" | "discipline-detail" | "notifications" | "letters" | "done";
 
@@ -81,95 +82,6 @@ const INTENT_OPTIONS = [
   { id: "negligent" as const, label: "Negligent", description: "They should have known. They were trained but didn't follow through. Careless.", suggestedLevel: 2 as DisciplineLevel },
   { id: "reckless" as const, label: "Reckless", description: "They knew the risk and did it anyway. Didn't care about the consequences.", suggestedLevel: 3 as DisciplineLevel },
   { id: "intentional" as const, label: "Intentional", description: "They did it on purpose. Deliberate violation. Knew exactly what they were doing.", suggestedLevel: 4 as DisciplineLevel },
-];
-
-const DISCIPLINE_LEVELS = [
-  {
-    level: 1 as const,
-    title: "Level 1 — Re-education",
-    subtitle: "Verbal counseling, not in personnel file",
-    color: "text-success",
-    bg: "bg-success/10",
-    border: "border-success/30",
-    when: "First time, didn't know, no harm, no history.",
-    whatToDo: [
-      "Have a coaching conversation with them (their supervisor does this)",
-      "Give them targeted retraining on the specific thing they violated",
-      "Have them sign an acknowledgment that they understand",
-      "Monitor them for 30 days to make sure it sticks",
-      "This does NOT go in their personnel file — it stays in the compliance file",
-    ],
-    whoDoesWhat: [
-      { who: "You (Compliance)", does: "Draft the talking points and identify the retraining needed" },
-      { who: "Their Supervisor", does: "Has the coaching conversation and documents it" },
-      { who: "HR", does: "Gets a copy for the compliance file (NOT the personnel file)" },
-    ],
-  },
-  {
-    level: 2 as const,
-    title: "Level 2 — Written Warning",
-    subtitle: "Formal warning, goes in personnel file",
-    color: "text-warning",
-    bg: "bg-warning/10",
-    border: "border-warning/30",
-    when: "Second offense, or first time but they should have known better. No intentional wrongdoing.",
-    whatToDo: [
-      "Formal written warning — this one goes in the personnel file",
-      "Mandatory retraining with a test they have to pass",
-      "Performance improvement plan with clear expectations",
-      "60–90 day monitoring period",
-      "Tell them clearly: next time is worse",
-    ],
-    whoDoesWhat: [
-      { who: "You (Compliance)", does: "Draft the written warning with specific findings" },
-      { who: "HR", does: "Review it for consistency with past practice, sit in on the meeting" },
-      { who: "Their Supervisor", does: "Deliver the warning with HR present" },
-    ],
-  },
-  {
-    level: 3 as const,
-    title: "Level 3 — Final Warning / Suspension",
-    subtitle: "Consider termination. Last chance.",
-    color: "text-orange-600",
-    bg: "bg-orange-500/10",
-    border: "border-orange-500/30",
-    when: "Serious violation, or they've been warned before and did it again. Real harm potential.",
-    whatToDo: [
-      "Present BOTH a final written warning and termination as options",
-      "Immediate access suspension pending review",
-      "Comprehensive audit of records accessed in the relevant period",
-      "Breach risk assessment if PHI was involved",
-      "May need to reassign them or restrict access",
-      "Report to Compliance Committee, consider board notification",
-    ],
-    whoDoesWhat: [
-      { who: "You (Compliance)", does: "Present findings to CCO/Committee, draft the recommendation" },
-      { who: "HR + Legal", does: "Review everything, approve the action" },
-      { who: "HR + Supervisor", does: "Deliver it together" },
-    ],
-  },
-  {
-    level: 4 as const,
-    title: "Level 4 — Recommend Termination",
-    subtitle: "They're done. Fired.",
-    color: "text-destructive",
-    bg: "bg-destructive/10",
-    border: "border-destructive/30",
-    when: "Intentional fraud, patient harm, retaliation, willful pattern, or they already got a final warning and did it again.",
-    whatToDo: [
-      "Recommend termination — effective immediately upon HR approval",
-      "Revoke ALL system access BEFORE the meeting (coordinate with IT)",
-      "Collect badge, keys, laptop, phone, everything",
-      "Figure out if you need to report to law enforcement, OCR, or licensing boards",
-      "Brief the Compliance Committee and Board",
-      "Make sure their patients/cases are safely transferred",
-    ],
-    whoDoesWhat: [
-      { who: "You (Compliance)", does: "Present findings + recommendation to CCO, Legal, HR" },
-      { who: "Legal", does: "Review for wrongful termination risk" },
-      { who: "HR", does: "Handle the logistics. HR leads the termination meeting — NOT Compliance" },
-    ],
-  },
 ];
 
 const NOTIFICATION_CHECKLIST = [
@@ -290,6 +202,9 @@ export default function DecisionFramework() {
           >
             Let's Go <ArrowRight className="w-4 h-4" />
           </button>
+          <p className="text-[11px] text-muted-foreground">
+            Rather have AI do this from your case facts? Use AI Recommendation, right above this section.
+          </p>
         </div>
       )}
 

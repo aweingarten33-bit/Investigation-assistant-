@@ -2,22 +2,28 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, Link } from "react-router-dom";
 import {
   ArrowLeft, BookOpen, MessageSquare, Scale, Timer, Handshake,
-  ChevronDown, Sparkles, FileText, Search, type LucideIcon,
+  ChevronDown, Sparkles, FileText, Search, Gavel, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AILetterGenerator from "@/components/toolkit/AILetterGenerator";
 import AICaseAnalysis from "@/components/toolkit/AICaseAnalysis";
+import AIRecommendation from "@/components/toolkit/AIRecommendation";
 import InvestigationGuide from "@/components/toolkit/InvestigationGuide";
 import RegulatoryTimelines from "@/components/toolkit/RegulatoryTimelines";
 import InterviewTemplates from "@/components/toolkit/InterviewTemplates";
 import DecisionFramework from "@/components/toolkit/DecisionFramework";
 import ConflictOfInterest from "@/components/toolkit/ConflictOfInterest";
 
-type SectionId = "ai-letters" | "ai-analysis" | "guide" | "timelines" | "interviews" | "decisions" | "coi";
+type SectionId = "guide" | "coi" | "ai-analysis" | "interviews" | "ai-recommendation" | "decisions" | "timelines" | "ai-letters";
 
 interface ToolkitNavState {
   prefillLetterType?: string;
   prefillCaseDetails?: string;
+}
+
+interface LetterPrefill {
+  letterType?: string;
+  caseDetails?: string;
 }
 
 // Ordered to match the real lifecycle of an investigation — the same 7
@@ -28,34 +34,49 @@ const SECTIONS: { id: SectionId; label: string; description: string; icon: Lucid
   { id: "coi", label: "Conflict of Interest", description: "Phase 1 — check before you assign an investigator", icon: Handshake },
   { id: "ai-analysis", label: "AI Case Analysis", description: "Phase 2–3 — quick regulatory read while you plan", icon: Search, isAI: true },
   { id: "interviews", label: "Interview Templates", description: "Phase 4 — copy-ready interview scripts", icon: MessageSquare },
-  { id: "decisions", label: "Decision Framework", description: "Phase 5 — finding → discipline → notification", icon: Scale },
+  { id: "ai-recommendation", label: "AI Recommendation", description: "Phase 5 — let AI recommend the finding & discipline", icon: Gavel, isAI: true },
+  { id: "decisions", label: "Decision Framework", description: "Phase 5 — or walk through it yourself, step by step", icon: Scale },
   { id: "timelines", label: "Regulatory Deadlines", description: "Check what's due now that you've decided", icon: Timer },
   { id: "ai-letters", label: "AI Letter Generator", description: "Phase 6 — draft the notification letters", icon: FileText, isAI: true },
 ];
 
 export default function Toolkit() {
   const location = useLocation();
-  const prefill = (location.state as ToolkitNavState | null) ?? null;
+  const navPrefill = (location.state as ToolkitNavState | null) ?? null;
+  const initialPrefill: LetterPrefill | null = navPrefill?.prefillLetterType || navPrefill?.prefillCaseDetails
+    ? { letterType: navPrefill.prefillLetterType, caseDetails: navPrefill.prefillCaseDetails }
+    : null;
 
-  const [openSection, setOpenSection] = useState<SectionId | null>(prefill?.prefillLetterType ? "ai-letters" : null);
+  const [openSection, setOpenSection] = useState<SectionId | null>(initialPrefill ? "ai-letters" : null);
+  const [letterPrefill, setLetterPrefill] = useState<LetterPrefill | null>(initialPrefill);
+  const [pendingScroll, setPendingScroll] = useState(!!initialPrefill);
   const letterSectionRef = useRef<HTMLDivElement>(null);
 
+  // Runs whenever something hands off into the Letter Generator — either the
+  // initial deep link from a just-generated report, or AI Recommendation
+  // below sending its result straight into a letter.
   useEffect(() => {
-    if (prefill?.prefillLetterType && letterSectionRef.current) {
+    if (pendingScroll && openSection === "ai-letters" && letterSectionRef.current) {
       letterSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      setPendingScroll(false);
     }
-    // Only run on mount — this is a one-time deep link, not a live sync.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [pendingScroll, openSection]);
+
+  const openLetterSection = (letterType: string | undefined, caseDetails: string) => {
+    setLetterPrefill({ letterType, caseDetails });
+    setOpenSection("ai-letters");
+    setPendingScroll(true);
+  };
 
   const SECTION_CONTENT: Record<SectionId, React.ReactNode> = {
     "ai-letters": (
       <AILetterGenerator
-        initialLetterType={prefill?.prefillLetterType}
-        initialCaseDetails={prefill?.prefillCaseDetails}
+        initialLetterType={letterPrefill?.letterType}
+        initialCaseDetails={letterPrefill?.caseDetails}
       />
     ),
     "ai-analysis": <AICaseAnalysis />,
+    "ai-recommendation": <AIRecommendation onDraftLetter={openLetterSection} />,
     guide: <InvestigationGuide />,
     timelines: <RegulatoryTimelines />,
     interviews: <InterviewTemplates />,
@@ -79,7 +100,7 @@ export default function Toolkit() {
               Investigation Toolkit
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground leading-snug">
-              Numbered 1–7, top to bottom — the same order as a real investigation, from first report to final letter.
+              Numbered 1–8, top to bottom — the same order as a real investigation, from first report to final letter.
             </p>
           </div>
 

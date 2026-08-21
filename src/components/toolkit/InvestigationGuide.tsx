@@ -260,7 +260,7 @@ const PHASES: Phase[] = [
           "UNSUBSTANTIATED: Can't prove it (doesn't mean it didn't happen)",
           "NEEDS MORE INFO: Notes/evidence are too sparse to call it either way",
         ],
-        tip: "Use the Decision Framework in this toolkit to walk through this step by step.",
+        tip: "Not sure what to recommend? Paste your findings into AI Recommendation above and it will tell you — or use the Decision Framework to walk through it yourself, step by step.",
       },
       {
         title: "If substantiated — was a rule actually broken?",
