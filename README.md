@@ -28,6 +28,48 @@ ANTHROPIC_MODEL=claude-sonnet-4-20250514
 ALLOWED_ORIGINS=http://localhost:8080,https://your-domain.com
 ```
 
+## Deploying
+
+There are two separate deploys — the static frontend and the Supabase Edge
+Functions (the AI backend). Render hosts the frontend only; the edge
+functions live on Supabase's own infrastructure regardless of where the
+frontend is hosted.
+
+**1. Deploy the Supabase Edge Functions** (do this first — the frontend needs a live backend to call):
+
+```sh
+npx supabase login
+npx supabase link --project-ref your-project-id
+npx supabase functions deploy analyze-report
+npx supabase functions deploy investigation-toolkit
+npx supabase secrets set ANTHROPIC_API_KEY=your_anthropic_key
+npx supabase secrets set ANTHROPIC_MODEL=claude-sonnet-4-20250514
+```
+
+**2. Deploy the frontend on Render:**
+
+1. Push this repo to GitHub (if it isn't already).
+2. In the Render dashboard: **New > Blueprint**, connect the repo. Render
+   reads `render.yaml` at the repo root and configures the static site
+   automatically (build command, publish directory, and the SPA rewrite
+   so routes like `/toolkit` don't 404 on refresh).
+3. Render will prompt for the three env vars marked `sync: false` in
+   `render.yaml` — fill in your real Supabase values (same ones as
+   `.env` locally): `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`,
+   `VITE_SUPABASE_PROJECT_ID`. These are baked into the build, not read at
+   runtime, so changing them later requires a redeploy.
+4. Deploy. Render gives you a `*.onrender.com` URL (or attach a custom
+   domain in the service's Settings).
+5. Back in Supabase, set `ALLOWED_ORIGINS` to that URL (comma-separated if
+   you also keep `localhost` for dev) — `npx supabase secrets set
+   ALLOWED_ORIGINS=https://your-app.onrender.com,http://localhost:8080` —
+   then redeploy the two edge functions so the new CORS allowlist takes
+   effect. Until you set this, the functions accept requests from any
+   origin (`*`), which is fine for testing but not for production.
+
+No `render.yaml` changes are needed for subsequent deploys — Render
+redeploys automatically on every push to the connected branch.
+
 ## Investigation Toolkit
 
 The `/toolkit` route (linked from the top-right of the home page, and from
