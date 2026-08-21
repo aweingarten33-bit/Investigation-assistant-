@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, Link } from "react-router-dom";
 import {
-  ArrowLeft, BookOpen, MessageSquare, Scale, Timer, Handshake,
+  ArrowLeft, ChevronRight, BookOpen, MessageSquare, Scale, Timer, Handshake,
   Sparkles, FileText, Search, Gavel, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -40,6 +40,23 @@ const SECTIONS: { id: SectionId; label: string; description: string; icon: Lucid
   { id: "ai-letters", label: "AI Letter Generator", description: "Phase 6 — draft the notification letters", icon: FileText, isAI: true },
 ];
 
+function SectionIcon({ section, active }: { section: (typeof SECTIONS)[number]; active: boolean }) {
+  const index = SECTIONS.indexOf(section);
+  return (
+    <div className="relative shrink-0">
+      <div className={cn(
+        "w-9 h-9 rounded-lg flex items-center justify-center",
+        active ? "bg-primary text-primary-foreground" : section.isAI ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground"
+      )}>
+        {section.isAI ? <Sparkles className="w-4 h-4" /> : <section.icon className="w-4 h-4" />}
+      </div>
+      <span className="absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full bg-foreground text-background text-[9px] font-bold flex items-center justify-center ring-2 ring-card">
+        {index + 1}
+      </span>
+    </div>
+  );
+}
+
 export default function Toolkit() {
   const location = useLocation();
   const navPrefill = (location.state as ToolkitNavState | null) ?? null;
@@ -47,23 +64,25 @@ export default function Toolkit() {
     ? { letterType: navPrefill.prefillLetterType, caseDetails: navPrefill.prefillCaseDetails }
     : null;
 
-  // One tool visible at a time — no accordion stack to scroll past.
-  // Defaults to the first phase unless a deep link (e.g. "Draft Notification
-  // Letter" from a just-generated report) hands off straight to the letters.
   const [activeSection, setActiveSection] = useState<SectionId>(initialPrefill ? "ai-letters" : "guide");
   const [letterPrefill, setLetterPrefill] = useState<LetterPrefill | null>(initialPrefill);
+  // Mobile only: which of the two full screens is showing. Desktop always
+  // shows the sidebar + content pane together, so this is ignored there.
+  const [mobileView, setMobileView] = useState<"menu" | "detail">(initialPrefill ? "detail" : "menu");
 
-  // Jump to the top of the content pane on every switch, including the
-  // initial deep link, so a long previous tool's scroll position never
-  // carries over into the next one.
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: initialPrefill ? "auto" : "smooth" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection]);
 
+  const selectSection = (id: SectionId) => {
+    setActiveSection(id);
+    setMobileView("detail");
+  };
+
   const openLetterSection = (letterType: string | undefined, caseDetails: string) => {
     setLetterPrefill({ letterType, caseDetails });
-    setActiveSection("ai-letters");
+    selectSection("ai-letters");
   };
 
   const SECTION_CONTENT: Record<SectionId, React.ReactNode> = {
@@ -88,100 +107,126 @@ export default function Toolkit() {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-[1000px] px-4 py-3 sm:py-10">
-        <div className="mb-3 sm:mb-4">
-          <Link
-            to="/"
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back to Report Generator
-          </Link>
-          <h1 className="text-base sm:text-xl font-bold text-foreground mb-0.5">
-            Investigation Toolkit
-          </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground leading-snug">
-            Pick a step below — same order as a real investigation, from first report to final letter.
-          </p>
-        </div>
-
-        {/* Mobile: horizontal scrolling step picker */}
-        <div className="flex sm:hidden gap-2 overflow-x-auto pb-3 -mx-4 px-4">
-          {SECTIONS.map((section, index) => {
-            const isActive = section.id === activeSection;
-            return (
-              <button
-                key={section.id}
-                onClick={() => setActiveSection(section.id)}
-                className={cn(
-                  "shrink-0 flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap",
-                  isActive
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-card text-muted-foreground border-border"
-                )}
-              >
-                <span className={cn(
-                  "flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold",
-                  isActive ? "bg-primary-foreground/20" : "bg-secondary"
-                )}>
-                  {index + 1}
-                </span>
-                {section.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-4">
-          {/* Desktop: persistent sidebar */}
-          <nav className="hidden sm:block sm:w-64 shrink-0">
-            <div className="rounded-2xl bg-background neu-raised p-2 space-y-1 sticky top-6">
-              {SECTIONS.map((section, index) => {
-                const isActive = section.id === activeSection;
-                return (
+        {/* ── Mobile (below sm): one full screen at a time ─────────────────── */}
+        <div className="sm:hidden">
+          {mobileView === "menu" ? (
+            <>
+              <div className="mb-3">
+                <Link
+                  to="/"
+                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  Back to Report Generator
+                </Link>
+                <h1 className="text-lg font-bold text-foreground mb-0.5">Investigation Toolkit</h1>
+                <p className="text-xs text-muted-foreground leading-snug">
+                  Same order as a real investigation — tap a step to open it.
+                </p>
+              </div>
+              <div className="rounded-2xl bg-background neu-raised overflow-hidden divide-y divide-border">
+                {SECTIONS.map((section) => (
                   <button
                     key={section.id}
-                    onClick={() => setActiveSection(section.id)}
-                    className={cn(
-                      "w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors",
-                      isActive ? "bg-primary text-primary-foreground" : "hover:bg-secondary/50 text-foreground"
-                    )}
+                    onClick={() => selectSection(section.id)}
+                    className="w-full flex items-center gap-3 px-4 py-3.5 text-left bg-card active:bg-secondary/30 transition-colors"
                   >
-                    <div className={cn(
-                      "relative shrink-0 w-7 h-7 rounded-md flex items-center justify-center",
-                      isActive ? "bg-primary-foreground/20" : section.isAI ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground"
-                    )}>
-                      {section.isAI ? <Sparkles className="w-3.5 h-3.5" /> : <section.icon className="w-3.5 h-3.5" />}
-                      <span className={cn(
-                        "absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center ring-2",
-                        isActive ? "bg-primary-foreground text-primary ring-primary" : "bg-foreground text-background ring-card"
-                      )}>
-                        {index + 1}
-                      </span>
+                    <SectionIcon section={section} active={false} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-foreground">{section.label}</p>
+                        {section.isAI && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold tracking-wide uppercase">AI</span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">{section.description}</p>
                     </div>
-                    <span className="text-sm font-medium truncate">{section.label}</span>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                   </button>
-                );
-              })}
-            </div>
-          </nav>
-
-          {/* Content pane — one tool, nothing else competing for attention */}
-          <div className="flex-1 min-w-0 rounded-2xl bg-background neu-raised overflow-hidden">
-            <div className="px-4 sm:px-5 pt-4 pb-3 border-b border-border flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-0.5">
-                  Step {activeIndex + 1} of {SECTIONS.length}
-                </p>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm sm:text-base font-semibold text-foreground truncate">{active.label}</h2>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setMobileView("menu")}
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-3"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Toolkit — Step {activeIndex + 1} of {SECTIONS.length}
+              </button>
+              <div className="rounded-2xl bg-background neu-raised overflow-hidden">
+                <div className="px-4 pt-4 pb-3 border-b border-border flex items-center gap-2">
+                  <h2 className="text-base font-semibold text-foreground">{active.label}</h2>
                   {active.isAI && (
                     <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold tracking-wide uppercase">AI</span>
                   )}
                 </div>
+                <div className="bg-card px-3 py-4">
+                  {SECTION_CONTENT[activeSection]}
+                </div>
               </div>
-            </div>
-            <div className="bg-card px-3 sm:px-5 py-4 sm:py-5">
-              {SECTION_CONTENT[activeSection]}
+            </>
+          )}
+        </div>
+
+        {/* ── Desktop (sm and up): sidebar + content pane together ─────────── */}
+        <div className="hidden sm:block">
+          <div className="mb-4">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to Report Generator
+            </Link>
+            <h1 className="text-xl font-bold text-foreground mb-0.5">Investigation Toolkit</h1>
+            <p className="text-sm text-muted-foreground leading-snug">
+              Pick a step — same order as a real investigation, from first report to final letter.
+            </p>
+          </div>
+
+          <div className="flex gap-4">
+            <nav className="w-72 shrink-0">
+              <div className="rounded-2xl bg-background neu-raised overflow-hidden divide-y divide-border sticky top-6">
+                {SECTIONS.map((section) => {
+                  const isActive = section.id === activeSection;
+                  return (
+                    <button
+                      key={section.id}
+                      onClick={() => setActiveSection(section.id)}
+                      className={cn(
+                        "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
+                        isActive ? "bg-primary/10" : "bg-card hover:bg-secondary/30"
+                      )}
+                    >
+                      <SectionIcon section={section} active={isActive} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className={cn("text-sm font-semibold truncate", isActive ? "text-primary" : "text-foreground")}>
+                            {section.label}
+                          </p>
+                          {section.isAI && (
+                            <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold tracking-wide uppercase">AI</span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </nav>
+
+            <div className="flex-1 min-w-0 rounded-2xl bg-background neu-raised overflow-hidden">
+              <div className="px-5 pt-4 pb-3 border-b border-border">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-0.5">
+                  Step {activeIndex + 1} of {SECTIONS.length}
+                </p>
+                <h2 className="text-base font-semibold text-foreground">{active.label}</h2>
+              </div>
+              <div className="bg-card px-5 py-5">
+                {SECTION_CONTENT[activeSection]}
+              </div>
             </div>
           </div>
         </div>
