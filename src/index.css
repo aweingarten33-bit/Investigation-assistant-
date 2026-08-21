@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Comic+Neue:wght@300;400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -51,8 +51,9 @@
     font-family: Arial, Helvetica, sans-serif;
   }
   h1, h2, h3 {
-    font-family: 'Comic Neue', Arial, sans-serif;
-    font-weight: 300 !important;
+    font-family: 'Cinzel', Arial, sans-serif;
+    font-weight: 500 !important;
+    letter-spacing: 0.02em;
     font-synthesis: none;
   }
 }
