@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Bangers&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Comic+Neue:wght@300;400;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -51,8 +51,8 @@
     font-family: Arial, Helvetica, sans-serif;
   }
   h1, h2, h3 {
-    font-family: 'Bangers', Arial, sans-serif;
-    font-weight: 400 !important;
+    font-family: 'Comic Neue', Arial, sans-serif;
+    font-weight: 300 !important;
     font-synthesis: none;
   }
 }
