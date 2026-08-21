@@ -40,6 +40,21 @@ Severity tiers: **Critical** = trust/integrity/cost; **High** = crash/UX-break;
 - `ALLOWED_ORIGINS` — comma-separated origin allowlist for CORS. When unset,
   the function allows all origins (`*`) for pre-production convenience.
 
+## Addendum: Investigation Toolkit (2026-08-21)
+
+Added `supabase/functions/investigation-toolkit/index.ts` for the AI Letter
+Generator and AI Case Analysis tools, following the same hardening pattern as
+`analyze-report`: origin allowlist (`ALLOWED_ORIGINS`), a `Vary: Origin` +
+`"null"`-for-unrecognized-origin CORS response, best-effort per-IP rate
+limiting (20/min, separate bucket from `analyze-report`), a hard request-body
+byte cap enforced while streaming (not just via `Content-Length`), POST-only,
+and strict input validation (letter type against a fixed enum, min/max length
+checks on free-text fields) before any field reaches the Claude prompt. No new
+secrets — reuses `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL`. Unlike
+`analyze-report`, this function has no multi-step state to sign (each call is
+a single, independent request), so there's no HMAC/integrity step to carry
+over. `analyze-report` itself was left untouched by this change.
+
 ## Residual risks (not addressed here)
 
 - **Cost protection** ultimately requires gateway-level rate limiting / auth;
