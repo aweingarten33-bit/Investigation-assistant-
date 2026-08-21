@@ -54,7 +54,7 @@ OPENAI_API_KEY=your_openai_key              # required if AI_PROVIDER=openai
 OPENAI_MODEL=gpt-4o                         # required if AI_PROVIDER=openai — no default, on purpose (see below)
 
 GEMINI_API_KEY=your_google_ai_key           # required if AI_PROVIDER=gemini
-GEMINI_MODEL=gemini-2.0-flash               # required if AI_PROVIDER=gemini — no default, on purpose (see below)
+GEMINI_MODEL=gemini-3.6-flash               # required if AI_PROVIDER=gemini — no default, on purpose (see below); confirmed live Aug 2026
 
 CLASSIFICATION_SIGNING_SECRET=...           # optional, falls back to whichever provider key is set
 PORT=3000                                   # optional, Render sets this itself

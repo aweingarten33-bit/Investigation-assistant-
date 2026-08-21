@@ -130,18 +130,24 @@ keep testing without a second provider to fall back to.
   only `OPENAI_API_KEY` or `GEMINI_API_KEY` set would have left the HMAC
   signing key silently empty. A startup log now warns loudly if no secret
   can be derived at all.
-- **Not verified against live traffic** for OpenAI or Gemini specifically
-  — unlike the Supabase-removal migration, there's no working key for
-  either in the environment this was built in. Verified instead: correct
-  routing per `AI_PROVIDER`, correct missing-config errors for all three,
-  and a live non-2xx response (a network-proxy rejection, not a real
-  Anthropic/OpenAI response) confirming the fetch/error-parsing path
-  doesn't crash end to end. The request/response shapes for each
-  provider's chat-completions/generateContent APIs are implemented per
-  each provider's public docs but have not been exercised against a real
-  account. Treat the first real use of `openai`/`gemini` as the actual
-  test, and watch the error message it produces if it fails — that's the
-  fast path back to a fix now.
+- **Gemini confirmed against live traffic (same day, real account).** The
+  `describeError` path did exactly what it was built for: a live
+  `generateContent` call against a real key returned a 404 for
+  `gemini-2.5-flash` ("no longer available to new users"), and Google's
+  own error body — surfaced verbatim through this app's error handling,
+  not just server logs — named the replacement (`gemini-3.6-flash`)
+  directly. No debugging beyond reading the toast was needed. Updated the
+  `GEMINI_MODEL` example in README.md/.env.example accordingly.
+- **OpenAI still unverified against live traffic** — no working key
+  available to test with in the environment this was built in. Verified
+  instead: correct routing per `AI_PROVIDER`, correct missing-config
+  errors, and a live non-2xx response (a network-proxy rejection, not a
+  real OpenAI response) confirming the fetch/error-parsing path doesn't
+  crash end to end. The request/response shapes are implemented per
+  OpenAI's public docs but unexercised against a real account. Treat the
+  first real use of `openai` as the actual test — the error-surfacing
+  work proven out on the Gemini path above means a wrong `OPENAI_MODEL`
+  should be similarly self-diagnosing from the toast alone.
 
 ## Residual risks (not addressed here)
 
