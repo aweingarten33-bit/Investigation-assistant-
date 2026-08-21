@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
-import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
+import { callApi } from "@/lib/api";
 
 const LETTER_TYPES = [
   { value: "hr_referral", label: "HR Referral Memo", group: "Internal", description: "Send this to HR first — hands off your finding & recommendation" },
@@ -54,21 +54,13 @@ export default function AILetterGenerator({ initialLetterType, initialCaseDetail
       toast.error("Case details are too long. Please shorten to under 20,000 characters.");
       return;
     }
-    if (!isSupabaseConfigured) {
-      toast.error("Service is not configured. Please contact the administrator.");
-      return;
-    }
-
     setIsGenerating(true);
     setResult("");
 
     try {
-      const { data, error } = await supabase.functions.invoke("investigation-toolkit", {
-        body: { mode: "generate_letter", letterType, caseDetails: caseDetails.trim() },
-      });
+      const { data, error } = await callApi<{ text: string }>("investigation-toolkit", { mode: "generate_letter", letterType, caseDetails: caseDetails.trim() });
       if (error) throw error;
-      if (data.error) throw new Error(data.error);
-      setResult(data.text);
+      setResult(data!.text);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to generate letter");
     } finally {

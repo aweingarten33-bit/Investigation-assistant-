@@ -3,7 +3,7 @@ import { Sparkles, Gavel, Loader2, Mail, AlertTriangle, ShieldAlert, ChevronDown
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
+import { callApi } from "@/lib/api";
 import { ClassificationSummary, Classification } from "@/components/ClassificationSummary";
 import { NotifyChecklist } from "@/components/NotifyChecklist";
 import { disciplineLevelForTier } from "@/lib/discipline-levels";
@@ -41,21 +41,13 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
       toast.error("Notes are too long. Please shorten them to under 100,000 characters.");
       return;
     }
-    if (!isSupabaseConfigured) {
-      toast.error("Service is not configured. Please contact the administrator.");
-      return;
-    }
-
     setIsAnalyzing(true);
     setResult(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke("analyze-report", {
-        body: { reportText: trimmed, step: "classify" },
-      });
+      const { data, error } = await callApi<{ classification: ClassifyResponse }>("analyze-report", { reportText: trimmed, step: "classify" });
       if (error) throw error;
-      if (data.error) throw new Error(data.error);
-      setResult(data.classification);
+      setResult(data!.classification);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to get a recommendation");
     } finally {

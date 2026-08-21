@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import mammoth from "mammoth";
-import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
+import { callApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { UploadZone } from "@/components/UploadZone";
 import { AnalysisResults } from "@/components/AnalysisResults";
@@ -113,39 +113,32 @@ const Index = () => {
       return;
     }
 
-    if (!isSupabaseConfigured) {
-      toast.error("Service is not configured. Please contact the administrator.");
-      return;
-    }
-
     const myRunId = ++runIdRef.current;
     setIsAnalyzing(true);
     setResult(null);
     setAnalyzeStep(1);
 
     try {
-      const { data: classifyData, error: classifyError } = await supabase.functions.invoke("analyze-report", {
-        body: { reportText: trimmedReportText, step: "classify" },
-      });
+      const { data: classifyData, error: classifyError } = await callApi<{ classification: unknown; signature: string }>(
+        "analyze-report", { reportText: trimmedReportText, step: "classify" },
+      );
       if (runIdRef.current !== myRunId) return;
       if (classifyError) throw classifyError;
-      if (classifyData.error) throw new Error(classifyData.error);
 
-      const classification = classifyData.classification;
-      const signature = classifyData.signature;
+      const classification = classifyData!.classification;
+      const signature = classifyData!.signature;
       setAnalyzeStep(2);
 
-      const { data: reportData, error: reportError } = await supabase.functions.invoke("analyze-report", {
-        body: { reportText: trimmedReportText, step: "report", classification, signature },
-      });
+      const { data: reportData, error: reportError } = await callApi<Omit<AnalysisResult, "caseId">>(
+        "analyze-report", { reportText: trimmedReportText, step: "report", classification, signature },
+      );
       if (runIdRef.current !== myRunId) return;
       if (reportError) throw reportError;
-      if (reportData.error) throw new Error(reportData.error);
 
       const caseMatch = trimmedReportText.match(/Case\s*#?\s*([\w-]+)/i);
       const caseId = caseMatch ? caseMatch[1] : new Date().toISOString().split("T")[0];
 
-      setResult({ ...reportData, caseId });
+      setResult({ ...reportData!, caseId });
       toast.success("Analysis complete — report generated.");
       setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 100);
     } catch (e: any) {
@@ -242,7 +235,7 @@ const Index = () => {
                 <div className="flex items-center gap-1.5 min-w-0">
                   <ShieldCheck className="h-3.5 w-3.5 text-primary shrink-0" />
                   <span className="text-[11px] text-muted-foreground">
-                    <span className="font-semibold text-foreground">Privacy-first demo.</span> This app does not save reports in the browser, but notes are sent to Supabase and Anthropic for analysis. Use anonymized data only.
+                    <span className="font-semibold text-foreground">Privacy-first demo.</span> This app does not save reports in the browser, but notes are sent to this app's own server and Anthropic for analysis. Use anonymized data only.
                   </span>
                 </div>
               </div>

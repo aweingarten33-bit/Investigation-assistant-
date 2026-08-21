@@ -3,14 +3,16 @@
 _Audit date: 2026-06-02_
 
 This document records the findings of a multi-angle review of the application
-(React + Vite frontend, Supabase Edge Function backend, Claude API) and the
-fixes applied in the same change set.
+(React + Vite frontend, Node/Express backend, Claude API) and the fixes
+applied in the same change set. The backend originally ran on Supabase Edge
+Functions; see the 2026-08-21 addendum below for the migration off Supabase
+and why the findings below still apply unchanged to the Express port.
 
 ## Architecture
 
 1. User pastes or uploads (`.docx`) investigation notes (potential PHI/PII).
-2. Frontend invokes the Supabase Edge Function `analyze-report`.
-3. The function calls Claude twice: **classify** → **generate report**.
+2. Frontend calls this app's own API route, `POST /api/analyze-report`.
+3. The server calls Claude twice: **classify** → **generate report**.
 4. Results are rendered and exported to Word (`.docx`).
 
 ## Findings & Fixes
@@ -37,8 +39,9 @@ Severity tiers: **Critical** = trust/integrity/cost; **High** = crash/UX-break;
 - `CLASSIFICATION_SIGNING_SECRET` (optional) — secret used to HMAC-sign the
   classification. Falls back to `ANTHROPIC_API_KEY` if unset. Set a dedicated
   secret in production.
-- `ALLOWED_ORIGINS` — comma-separated origin allowlist for CORS. When unset,
-  the function allows all origins (`*`) for pre-production convenience.
+- ~~`ALLOWED_ORIGINS`~~ — removed in the 2026-08-21 migration below. The
+  frontend and API are now served from the same origin, so there's no CORS
+  surface to allowlist.
 
 ## Addendum: Investigation Toolkit (2026-08-21)
 
@@ -55,10 +58,55 @@ secrets — reuses `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL`. Unlike
 a single, independent request), so there's no HMAC/integrity step to carry
 over. `analyze-report` itself was left untouched by this change.
 
+## Addendum: Removed the Supabase dependency (2026-08-21)
+
+The app originally used Supabase for exactly one thing — hosting the two
+Edge Functions above as a way to call Anthropic without exposing the API key
+in the browser. It had no auth, no database, no storage; Supabase was purely
+a serverless-functions host, a byproduct of the original Lovable scaffold
+rather than a deliberate requirement. Replaced with a small Express server
+(`server/`) that serves both the built frontend and the two API routes from
+a single process/origin, deployed as one Render service.
+
+What changed, and why the findings above still hold:
+
+- **`supabase/functions/analyze-report/index.ts`** → `server/routes/analyze-report.js`.
+  Ported line-for-line: same classification/report prompts, same
+  `classificationSchema`/`reportSchema`, same HMAC signing and constant-time
+  verification (`node:crypto`'s Web Crypto `crypto.subtle` instead of Deno's —
+  same API), same `isValidClassificationShape` defense-in-depth, same
+  `MAX_REPORT_TEXT_LENGTH` (100,000 chars).
+- **`supabase/functions/investigation-toolkit/index.ts`** → `server/routes/investigation-toolkit.js`.
+  Same port: same `LETTER_TYPES` (now including `hr_referral`), same prompts,
+  same length bounds.
+- **Body-size cap**: Express's `express.json({ limit })` enforces the byte
+  cap while reading the request stream (via the `raw-body` package), not
+  just via a `Content-Length` header check — the same property the hand-
+  rolled `readBodyWithLimit` was providing in the Deno version. Limits are
+  unchanged (`MAX_BODY_BYTES` per route, same formula as before).
+- **Rate limiting**: same per-IP, in-memory, sliding-window logic
+  (`createRateLimiter`), but now running in a persistent Node process
+  instead of ephemeral, independently-scaled Deno edge instances. This
+  makes it a **stronger** guarantee than before, not a weaker one — see the
+  updated residual-risk note below.
+- **CORS**: eliminated, not hardened-and-kept. Same-origin means there's no
+  cross-origin request to allow or deny in the first place; `ALLOWED_ORIGINS`
+  is gone (see Configuration notes above).
+- **`ANTHROPIC_API_KEY`**: still server-only, never sent to or readable by
+  the browser. Same trust boundary as before, just a different process
+  holding it.
+
 ## Residual risks (not addressed here)
 
-- **Cost protection** ultimately requires gateway-level rate limiting / auth;
-  the in-function limiter is per-instance and best-effort only.
+- **Cost protection** still ultimately benefits from a gateway/WAF-level
+  limit for defense-in-depth, but the in-process limiter is no longer purely
+  best-effort the way the per-instance Deno version was — a single Render
+  service means one shared limiter sees all traffic, not a fragmented view
+  across cold-started instances. Horizontal scaling (multiple Render
+  instances) would reintroduce the old per-instance caveat; this app runs as
+  a single instance.
 - **PHI is transmitted twice** (once per step). A server-side session/token
   pattern would halve over-the-wire exposure.
-- **`deno.land/std@0.168.0`** is pinned to a 2022 release; consider upgrading.
+- **No database migration risk was introduced** by this change — there was
+  never a database. If a future feature adds one, it needs its own review
+  (RLS/access-control design), not inherited from this migration.
