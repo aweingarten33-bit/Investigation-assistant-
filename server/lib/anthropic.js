@@ -101,3 +101,54 @@ export async function callText(systemPrompt, userMessage) {
   }
   return block.text;
 }
+
+// Free-text output grounded in live web search — used to pull current
+// regulatory/industry context into a recommendation before it's made.
+// Uses the basic web_search_20250305 tool type (rather than the newer
+// dynamic-filtering variant) since ANTHROPIC_MODEL is user-configured and
+// not guaranteed to support the newer tool version.
+export async function callTextWithSearch(systemPrompt, userMessage, maxUses = 3) {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey(),
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: model(),
+      max_tokens: 2048,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userMessage }],
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: maxUses }],
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    console.error("Anthropic API error:", response.status, text);
+    throw new HttpError(describeError(response.status, text), statusFor(response.status));
+  }
+
+  const data = await response.json();
+  const content = data.content || [];
+  const text = content.filter((b) => b.type === "text").map((b) => b.text).join("");
+
+  const sources = [];
+  const seen = new Set();
+  for (const block of content) {
+    if (block.type !== "web_search_tool_result" || !Array.isArray(block.content)) continue;
+    for (const result of block.content) {
+      if (result.type === "web_search_result" && result.url && !seen.has(result.url)) {
+        seen.add(result.url);
+        sources.push({ url: result.url, title: result.title || result.url });
+      }
+    }
+  }
+
+  if (!text.trim()) {
+    console.error("No text block in search response:", JSON.stringify(data));
+    throw new Error("No response from AI");
+  }
+  return { text, sources };
+}

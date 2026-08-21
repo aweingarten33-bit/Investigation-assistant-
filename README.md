@@ -105,6 +105,22 @@ The `/toolkit` route (linked from the top-right of the home page, and from
   Framework, Conflict of Interest** — a static, HIPAA-focused investigator
   reference library. No AI calls, no data leaves the browser.
 
+### Live web-search grounding
+
+Both the AI Recommendation tool and the full Report Generator's classification
+step run a live web search before the severity/discipline-tier determination —
+a short, general research pass on current OCR/HHS enforcement trends and
+typical employer disciplinary practice for that *type* of violation. The
+search is deliberately scoped to never include names or other identifying
+details from your notes — it searches on the violation type only (e.g.
+"unauthorized employee access to patient records"), not on the specific case.
+Results are shown as clickable "Grounded in live search" sources under the
+classification card, so the basis for the recommendation is visible, not a
+black box. If the search fails or isn't available for your configured
+provider/model, classification still proceeds normally without it — grounding
+is a soft-fail enhancement, never a blocker. See `.env.example` for the
+OpenAI caveat (requires a `-search-preview` model).
+
 All AI tools run through `server/routes/analyze-report.js` and
 `server/routes/investigation-toolkit.js`, which carry forward the same
 hardening the original Supabase functions had (best-effort per-IP rate

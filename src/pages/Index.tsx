@@ -119,7 +119,7 @@ const Index = () => {
     setAnalyzeStep(1);
 
     try {
-      const { data: classifyData, error: classifyError } = await callApi<{ classification: unknown; signature: string }>(
+      const { data: classifyData, error: classifyError } = await callApi<{ classification: unknown; signature: string; sources?: AnalysisResult["sources"] }>(
         "analyze-report", { reportText: trimmedReportText, step: "classify" },
       );
       if (runIdRef.current !== myRunId) return;
@@ -127,6 +127,7 @@ const Index = () => {
 
       const classification = classifyData!.classification;
       const signature = classifyData!.signature;
+      const sources = classifyData!.sources;
       setAnalyzeStep(2);
 
       const { data: reportData, error: reportError } = await callApi<Omit<AnalysisResult, "caseId">>(
@@ -138,7 +139,7 @@ const Index = () => {
       const caseMatch = trimmedReportText.match(/Case\s*#?\s*([\w-]+)/i);
       const caseId = caseMatch ? caseMatch[1] : new Date().toISOString().split("T")[0];
 
-      setResult({ ...reportData!, caseId });
+      setResult({ ...reportData!, caseId, sources });
       toast.success("Analysis complete — report generated.");
       setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 100);
     } catch (e: any) {

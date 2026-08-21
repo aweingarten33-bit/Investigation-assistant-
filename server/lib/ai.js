@@ -26,3 +26,12 @@ export async function callStructured(systemPrompt, userMessage, schema, toolName
 export async function callText(systemPrompt, userMessage) {
   return currentProvider().callText(systemPrompt, userMessage);
 }
+
+// Free-text output grounded in live web search — returns { text, sources }.
+// Used to pull current regulatory/industry context into a recommendation
+// before it's made. Callers should treat failures here as soft (fall back
+// to an ungrounded call) rather than blocking the whole feature — search
+// support/availability varies by provider and model.
+export async function callTextWithSearch(systemPrompt, userMessage) {
+  return currentProvider().callTextWithSearch(systemPrompt, userMessage);
+}

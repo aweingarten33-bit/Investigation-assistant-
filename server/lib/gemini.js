@@ -82,3 +82,34 @@ export async function callText(systemPrompt, userMessage) {
   }
   return text;
 }
+
+// Free-text output grounded in live Google Search — used to pull current
+// regulatory/industry context into a recommendation before it's made.
+export async function callTextWithSearch(systemPrompt, userMessage) {
+  const data = await generateContent({
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: "user", parts: [{ text: userMessage }] }],
+    tools: [{ google_search: {} }],
+  });
+
+  const parts = data.candidates?.[0]?.content?.parts ?? [];
+  const text = parts.map((p) => p.text).filter(Boolean).join("");
+
+  const chunks = data.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+  const sources = [];
+  const seen = new Set();
+  for (const chunk of chunks) {
+    const url = chunk.web?.uri || chunk.uri;
+    const title = chunk.web?.title || chunk.title || url;
+    if (url && !seen.has(url)) {
+      seen.add(url);
+      sources.push({ url, title });
+    }
+  }
+
+  if (!text) {
+    console.error("No text in search response:", JSON.stringify(data));
+    throw new Error("No response from AI");
+  }
+  return { text, sources };
+}

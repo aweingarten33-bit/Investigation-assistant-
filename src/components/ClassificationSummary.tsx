@@ -1,5 +1,5 @@
-import { AnalysisResult, Decision, RiskLevel } from "@/lib/types";
-import { Shield } from "lucide-react";
+import { AnalysisResult, Decision, RiskLevel, Source } from "@/lib/types";
+import { Shield, Globe } from "lucide-react";
 
 const decisionStyles: Record<Decision, string> = {
   substantiated: "bg-destructive text-destructive-foreground",
@@ -29,7 +29,7 @@ export type Classification = Pick<
 // Renders the classification card shared by the full report (AnalysisResults)
 // and the standalone AI Recommendation tool — same visual language wherever
 // a determination + discipline tier is shown.
-export function ClassificationSummary({ classification }: { classification: Classification }) {
+export function ClassificationSummary({ classification, sources }: { classification: Classification; sources?: Source[] }) {
   const c = classification;
   return (
     <div className="rounded-lg border border-border bg-card p-5">
@@ -94,6 +94,25 @@ export function ClassificationSummary({ classification }: { classification: Clas
               </ul>
             </div>
           )}
+        </div>
+      )}
+      {sources && sources.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-border">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Globe className="h-3 w-3 text-muted-foreground" />
+            <span className="text-muted-foreground font-medium text-xs uppercase tracking-wide">
+              Grounded in live search — {sources.length} source{sources.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          <ul className="space-y-1">
+            {sources.map((s, i) => (
+              <li key={i} className="text-xs truncate">
+                <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                  {s.title}
+                </a>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

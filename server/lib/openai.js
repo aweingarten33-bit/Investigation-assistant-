@@ -100,3 +100,26 @@ export async function callText(systemPrompt, userMessage) {
   }
   return text;
 }
+
+// Free-text output grounded in live web search.
+//
+// Unlike Anthropic/Gemini, OpenAI's Chat Completions API (which this file
+// uses) has no optional web-search tool that works with an arbitrary model —
+// search is instead baked into specific "-search-preview" models, which
+// always search on every call. Getting toggleable search on any model
+// requires OpenAI's separate Responses API, a different request/response
+// shape from Chat Completions — out of scope here since it would mean a
+// second code path for a feature this app doesn't otherwise need. If
+// OPENAI_MODEL isn't a search-preview model, fail clearly instead of
+// silently skipping grounding.
+export async function callTextWithSearch(systemPrompt, userMessage) {
+  if (!model().includes("search-preview")) {
+    throw new HttpError(
+      `OPENAI_MODEL "${model()}" does not support web search. OpenAI's Chat Completions API only searches ` +
+      `with a "-search-preview" model (e.g. gpt-4o-search-preview) — set OPENAI_MODEL to one of those, or switch ` +
+      `AI_PROVIDER to anthropic or gemini, both of which support search on any configured model.`,
+      400,
+    );
+  }
+  return callText(systemPrompt, userMessage).then((text) => ({ text, sources: [] }));
+}

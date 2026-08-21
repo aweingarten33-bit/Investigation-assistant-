@@ -9,6 +9,7 @@ import { NotifyChecklist } from "@/components/NotifyChecklist";
 import { disciplineLevelForTier } from "@/lib/discipline-levels";
 import { suggestLetterType, buildLetterPrefillFromClassification, letterButtonLabel } from "@/lib/letter-prefill";
 import { cn } from "@/lib/utils";
+import { Source } from "@/lib/types";
 
 const MIN_LENGTH = 50;
 const MAX_LENGTH = 100_000;
@@ -24,6 +25,7 @@ interface AIRecommendationProps {
 export default function AIRecommendation({ onDraftLetter }: AIRecommendationProps) {
   const [caseFacts, setCaseFacts] = useState("");
   const [result, setResult] = useState<ClassifyResponse | null>(null);
+  const [sources, setSources] = useState<Source[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showGovernance, setShowGovernance] = useState(false);
 
@@ -43,11 +45,13 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
     }
     setIsAnalyzing(true);
     setResult(null);
+    setSources([]);
 
     try {
-      const { data, error } = await callApi<{ classification: ClassifyResponse }>("analyze-report", { reportText: trimmed, step: "classify" });
+      const { data, error } = await callApi<{ classification: ClassifyResponse; sources?: Source[] }>("analyze-report", { reportText: trimmed, step: "classify" });
       if (error) throw error;
       setResult(data!.classification);
+      setSources(data!.sources || []);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to get a recommendation");
     } finally {
@@ -132,7 +136,7 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
 
       {result && (
         <div className="space-y-3">
-          <ClassificationSummary classification={result} />
+          <ClassificationSummary classification={result} sources={sources} />
 
           {result.decision === "needs_more_info" ? (
             <div className="flex items-start gap-2.5 px-4 py-3 bg-warning/10 border border-warning/30 rounded-lg">

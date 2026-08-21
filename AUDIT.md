@@ -149,6 +149,68 @@ keep testing without a second provider to fall back to.
   work proven out on the Gemini path above means a wrong `OPENAI_MODEL`
   should be similarly self-diagnosing from the toast alone.
 
+## Addendum: Live web-search grounding for recommendations (2026-08-21)
+
+Added a grounding pass before the classification step (`analyze-report.js`,
+`step: "classify"` — used by both the AI Recommendation tool and the full
+Report Generator) so the severity/discipline-tier determination is checked
+against current information instead of relying solely on the model's
+training-data recall. Motivated directly by the user asking, in effect,
+"is this recommendation based on Reddit?" — a fair question the app had no
+good answer to before this.
+
+- `server/lib/{anthropic,gemini}.js` each add `callTextWithSearch`, using
+  the provider's native web-search tool (`web_search_20250305` for
+  Anthropic — the basic variant, chosen over `_20260209`'s dynamic
+  filtering since `ANTHROPIC_MODEL` is user-configured and not guaranteed
+  to support it; `google_search` for Gemini). Both return `{ text, sources }`
+  in a single request — these are server-side tools, no client-side loop.
+- `server/lib/openai.js` adds the same function but gated: OpenAI's Chat
+  Completions API (which this app uses) has no optional/toggleable
+  web-search tool for arbitrary models — search is instead baked into
+  specific `-search-preview` models that always search. If `OPENAI_MODEL`
+  isn't one of those, `callTextWithSearch` throws a clear `HttpError`
+  rather than silently returning an ungrounded result. True toggleable
+  search on any OpenAI model requires the separate Responses API — a
+  different request/response shape from Chat Completions — which is out of
+  scope here; see the comment in `openai.js`.
+- **The grounding search never sees case-identifying details on purpose.**
+  It's a separate `callTextWithSearch` call with its own prompt
+  (`RESEARCH_PROMPT`), scoped to "search on the violation type only, never
+  on names/employer/dates" and told explicitly to research general
+  regulatory/industry-practice background, not this specific case. This
+  matters because a search query is a different exposure surface than an
+  LLM inference call — it can hit the provider's search backend/index, not
+  just the model.
+- **Forced tool-choice and server-side search don't mix safely in one
+  call**, so grounding is a genuinely separate step, not a tool bolted onto
+  the existing classification call. The classification step still uses
+  `tool_choice: {type: "tool", ...}` to force the structured JSON schema
+  back, completely unchanged from before — the grounding research result
+  (if any) is generated first, then folded into the classification
+  prompt's user message as a clearly-labeled "CURRENT REGULATORY CONTEXT"
+  section, with `CLASSIFICATION_PROMPT` explicitly told that section is
+  background, not a case fact, and never overrides what's in the notes.
+- **Soft-fail, not a blocker.** `researchContext()` in `analyze-report.js`
+  catches any grounding failure (missing search support, rate limit,
+  provider error) and logs it, then proceeds with classification exactly as
+  it worked before this change. A user should never see "recommendation
+  failed" because search was down.
+- **Sources are shown, not hidden.** `sources` is returned as a sibling
+  field on the classify response (outside the HMAC-signed `classification`
+  object, so the existing integrity check — see the addendum above — is
+  completely untouched) and rendered in `ClassificationSummary.tsx` as a
+  "Grounded in live search" list of clickable links. Both AI Recommendation
+  and the full Report Generator show it.
+- Verified via unit-style tests against the exact documented response
+  shapes (Anthropic's `web_search_tool_result`/`web_search_result` blocks,
+  Gemini's `groundingMetadata.groundingChunks`) and an end-to-end mocked-
+  fetch run of the actual Express route handler confirming: (1) the
+  grounding text is injected into the classification prompt when search
+  succeeds, (2) classification still returns 200 with an empty `sources`
+  array when search fails, and (3) the HMAC signature is computed only over
+  the classification object, unaffected by sources either way.
+
 ## Residual risks (not addressed here)
 
 - **Cost protection** still ultimately benefits from a gateway/WAF-level
