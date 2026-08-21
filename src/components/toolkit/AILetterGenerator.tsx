@@ -8,6 +8,7 @@ import ReactMarkdown from "react-markdown";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 
 const LETTER_TYPES = [
+  { value: "hr_referral", label: "HR Referral Memo", group: "Internal", description: "Send this to HR first — hands off your finding & recommendation" },
   { value: "verbal_counseling", label: "Verbal Counseling Memo", group: "Substantiated", description: "Level 1 — first-time minor violation" },
   { value: "written_warning", label: "Written Warning", group: "Substantiated", description: "Level 2 — repeat or moderate violation" },
   { value: "final_warning", label: "Final Warning / Suspension", group: "Substantiated", description: "Level 3 — serious violation" },
@@ -82,7 +83,7 @@ export default function AILetterGenerator({ initialLetterType, initialCaseDetail
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const groups = ["Substantiated", "Closure", "Communications", "Regulatory"];
+  const groups = ["Internal", "Substantiated", "Closure", "Communications", "Regulatory"];
 
   return (
     <div className="space-y-4">

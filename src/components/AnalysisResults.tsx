@@ -1,6 +1,7 @@
 import type React from "react";
 import { AnalysisResult } from "@/lib/types";
 import { ClassificationSummary } from "@/components/ClassificationSummary";
+import { NotifyChecklist } from "@/components/NotifyChecklist";
 import {
   FileText, ListChecks, Briefcase, AlertTriangle,
   Scale, BookOpen, Info, ChevronDown,
@@ -57,6 +58,13 @@ export function AnalysisResults({ result }: { result: AnalysisResult }) {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* Who to notify */}
+      {result.decision !== "needs_more_info" && (
+        <div className="rounded-lg border border-border bg-card p-5">
+          <NotifyChecklist decision={result.decision} />
         </div>
       )}
 

@@ -74,6 +74,10 @@ async function readBodyWithLimit(req: Request, limit: number): Promise<string | 
 // ─── Letter types ─────────────────────────────────────────────────────────
 
 const LETTER_TYPES: Record<string, { label: string; instructions: string }> = {
+  hr_referral: {
+    label: "HR Referral Memo",
+    instructions: "An INTERNAL memo FROM the Compliance and Privacy Department TO Human Resources — this is not sent to the employee. It hands off a substantiated finding to HR for review and action. Include: a concise summary of what was investigated and found, the specific policy/HIPAA provisions violated, the recommended disciplinary action and why (referencing severity, intent, and any prior history), and an explicit request that HR review the recommendation, make the final determination, and lead the notification to the employee. Close by noting Compliance is available for questions and that the final decision rests with HR, Labor and Employee Relations, and supervisory staff.",
+  },
   verbal_counseling: {
     label: "Verbal Counseling Memo",
     instructions: "Level 1 — first-time minor violation. Document a coaching conversation, targeted re-education, and a policy acknowledgment re-signature. This memo stays in the compliance file, not the personnel file. Tone: corrective, not punitive.",

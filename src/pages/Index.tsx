@@ -10,7 +10,7 @@ import { Disclaimer } from "@/components/Disclaimer";
 import { exportToDocx } from "@/lib/docx-export";
 import { AnalysisResult } from "@/lib/types";
 import { SAMPLE_REPORT_TEXT } from "@/lib/sample-report";
-import { suggestLetterType, buildLetterPrefillDetails } from "@/lib/letter-prefill";
+import { suggestLetterType, buildLetterPrefillDetails, letterButtonLabel } from "@/lib/letter-prefill";
 import { Loader2, Download, Sparkles, FileText, RotateCcw, XCircle, ShieldCheck, Mail, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 
@@ -206,7 +206,7 @@ const Index = () => {
                   className="mt-2 w-full flex items-center justify-center gap-1.5 h-9 text-xs font-medium text-primary hover:text-primary/80 transition-colors rounded-lg border border-primary/20 bg-primary/5 hover:bg-primary/10"
                 >
                   <Mail className="h-3.5 w-3.5" />
-                  Draft Notification Letter
+                  {letterButtonLabel(suggestLetterType(result))}
                 </button>
               )}
             </div>

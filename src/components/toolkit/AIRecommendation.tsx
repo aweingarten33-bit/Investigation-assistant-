@@ -5,8 +5,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { ClassificationSummary, Classification } from "@/components/ClassificationSummary";
+import { NotifyChecklist } from "@/components/NotifyChecklist";
 import { disciplineLevelForTier } from "@/lib/discipline-levels";
-import { suggestLetterType, buildLetterPrefillFromClassification } from "@/lib/letter-prefill";
+import { suggestLetterType, buildLetterPrefillFromClassification, letterButtonLabel } from "@/lib/letter-prefill";
 import { cn } from "@/lib/utils";
 
 const MIN_LENGTH = 50;
@@ -62,6 +63,7 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
   };
 
   const level = result?.decision === "substantiated" ? disciplineLevelForTier(result.recommendationTier) : null;
+  const suggestedLetterType = result ? suggestLetterType(result) : undefined;
 
   return (
     <div className="space-y-4">
@@ -71,11 +73,11 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
         <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">AI-Powered</span>
       </div>
       <p className="text-xs text-muted-foreground">
-        Done investigating and not sure what to recommend? Paste in everything you found — evidence, interview
-        notes, prior history — and AI will tell you whether it's substantiated and exactly what disciplinary
-        action to take: re-education, written warning, final warning, or termination. This is the same engine
-        that drives the Report Generator on the home page, so the recommendation matches what a full report
-        would conclude.
+        Done investigating and have no idea what to recommend, or who to even tell? Paste in everything you
+        found — evidence, interview notes, prior history — and this will tell you whether it's substantiated,
+        exactly what disciplinary action to take (re-education, written warning, final warning, or termination),
+        and who to notify first. This is the same engine that drives the Report Generator on the home page, so
+        the recommendation matches what a full report would conclude.
       </p>
 
       <Textarea
@@ -124,22 +126,24 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
             </div>
           ) : (
             <div className="rounded-lg border border-success/30 bg-success/10 p-4 text-xs text-foreground/90">
-              Not substantiated — document your finding, notify the subject they've been cleared, and close the
-              investigation. See the Decision Framework below for the full closure checklist.
+              Not substantiated — document your finding and close the investigation once you've told the people below.
             </div>
           )}
 
           {result.decision !== "needs_more_info" && (
-            <button
-              onClick={() => onDraftLetter(
-                suggestLetterType(result),
-                buildLetterPrefillFromClassification(result, caseFacts),
-              )}
-              className="w-full flex items-center justify-center gap-1.5 h-9 text-xs font-medium text-primary hover:text-primary/80 transition-colors rounded-lg border border-primary/20 bg-primary/5 hover:bg-primary/10"
-            >
-              <Mail className="h-3.5 w-3.5" />
-              Draft Notification Letter
-            </button>
+            <>
+              <NotifyChecklist decision={result.decision} />
+              <button
+                onClick={() => onDraftLetter(
+                  suggestedLetterType,
+                  buildLetterPrefillFromClassification(result, caseFacts),
+                )}
+                className="w-full flex items-center justify-center gap-1.5 h-9 text-xs font-medium text-primary hover:text-primary/80 transition-colors rounded-lg border border-primary/20 bg-primary/5 hover:bg-primary/10"
+              >
+                <Mail className="h-3.5 w-3.5" />
+                {letterButtonLabel(suggestedLetterType)}
+              </button>
+            </>
           )}
         </div>
       )}

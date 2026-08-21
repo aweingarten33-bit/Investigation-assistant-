@@ -1,11 +1,12 @@
 import { useState } from "react";
 import {
-  Scale, ArrowRight, CheckCircle2, XCircle, AlertTriangle, MinusCircle,
+  Scale, ArrowRight, CheckCircle2, XCircle, MinusCircle,
   HelpCircle, ChevronDown, ChevronRight, Copy, Check, FileText, Users,
   Gavel, Lightbulb, Mail, Send, RotateCcw, ArrowLeft
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DISCIPLINE_LEVELS } from "@/lib/discipline-levels";
+import { NotifyChecklist } from "@/components/NotifyChecklist";
 
 type WizardStep = "start" | "determination" | "determination-detail" | "compliance-check" | "intent" | "discipline" | "discipline-detail" | "notifications" | "letters" | "done";
 
@@ -82,16 +83,6 @@ const INTENT_OPTIONS = [
   { id: "negligent" as const, label: "Negligent", description: "They should have known. They were trained but didn't follow through. Careless.", suggestedLevel: 2 as DisciplineLevel },
   { id: "reckless" as const, label: "Reckless", description: "They knew the risk and did it anyway. Didn't care about the consequences.", suggestedLevel: 3 as DisciplineLevel },
   { id: "intentional" as const, label: "Intentional", description: "They did it on purpose. Deliberate violation. Knew exactly what they were doing.", suggestedLevel: 4 as DisciplineLevel },
-];
-
-const NOTIFICATION_CHECKLIST = [
-  { who: "The person who was investigated (the subject)", always: true, what: "Tell them the finding. If substantiated, their supervisor + HR handle the discipline separately." },
-  { who: "The person who reported it (the complainant)", always: true, what: "Tell them it was investigated and 'appropriate action was taken.' NEVER tell them what happened to the other person." },
-  { who: "HR", always: false, onlyIf: "Substantiated finding", what: "Send them the findings + your discipline recommendation. They handle the personnel side." },
-  { who: "The subject's supervisor", always: false, onlyIf: "Substantiated finding", what: "Summary of findings + corrective action plan. NOT the full investigation file." },
-  { who: "Compliance Committee", always: false, onlyIf: "Substantiated or significant", what: "Summary at next meeting. Trends and patterns. Significant cases in detail." },
-  { who: "Board / Audit Committee", always: false, onlyIf: "Large breach, termination, self-disclosure, government program issues", what: "Summary only. No operational details." },
-  { who: "OCR / State AG", always: false, onlyIf: "Required by law — ALWAYS check with Legal first", what: "Only when legally required. See the Regulatory Deadlines tab." },
 ];
 
 export default function DecisionFramework() {
@@ -510,37 +501,7 @@ export default function DecisionFramework() {
               Not everyone gets the full report. Here's who to tell and what to tell them:
             </p>
 
-            <div className="space-y-2">
-              {NOTIFICATION_CHECKLIST.map((item, i) => (
-                <div key={i} className={cn(
-                  "rounded-lg border p-3.5",
-                  item.always ? "border-primary/30 bg-primary/5" : "border-border"
-                )}>
-                  <div className="flex items-start gap-2.5">
-                    <div className={cn(
-                      "w-5 h-5 rounded flex items-center justify-center shrink-0 mt-0.5",
-                      item.always ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                    )}>
-                      {item.always ? <CheckCircle2 className="w-3 h-3" /> : <span className="text-[9px] font-bold">IF</span>}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">{item.who}</p>
-                      {!item.always && item.onlyIf && (
-                        <p className="text-[10px] text-warning font-medium mt-0.5">Only if: {item.onlyIf}</p>
-                      )}
-                      <p className="text-xs text-muted-foreground mt-1">{item.what}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-4 flex items-start gap-2 px-4 py-3 bg-warning/10 rounded-lg border border-warning/30">
-              <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
-              <p className="text-xs text-foreground/90">
-                <strong>NEVER tell the complainant</strong> what disciplinary action was taken against someone else. Just say: "The matter was investigated and appropriate action was taken."
-              </p>
-            </div>
+            <NotifyChecklist decision="substantiated" />
           </div>
 
           <div className="flex items-center gap-3">
@@ -650,9 +611,9 @@ export default function DecisionFramework() {
               <p className="text-xs font-semibold text-foreground">Don't Forget</p>
               <ul className="text-[11px] text-foreground/80 space-y-0.5">
                 <li>• <strong>Be consistent.</strong> If you fire one person for something, you can't just warn another for the same thing. That's a lawsuit.</li>
-                <li>• <strong>HR must be involved</strong> for anything beyond verbal coaching.</li>
+                <li>• <strong>HR must be involved</strong> for anything beyond verbal coaching — send them the HR Referral Memo first, before anything goes to the employee.</li>
                 <li>• <strong>Schedule anti-retaliation check-ins</strong> with the complainant at 30 and 60 days.</li>
-                <li>• <strong>Use the AI Letter Generator</strong> in this toolkit to draft all the notification letters.</li>
+                <li>• <strong>Use the AI Letter Generator</strong> in this toolkit to draft the HR memo and every notification letter.</li>
               </ul>
             </div>
           </div>
