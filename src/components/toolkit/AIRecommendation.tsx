@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Sparkles, Gavel, Loader2, Mail, AlertTriangle } from "lucide-react";
+import { Sparkles, Gavel, Loader2, Mail, AlertTriangle, ShieldAlert, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -25,6 +25,7 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
   const [caseFacts, setCaseFacts] = useState("");
   const [result, setResult] = useState<ClassifyResponse | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [showGovernance, setShowGovernance] = useState(false);
 
   const analyze = async () => {
     const trimmed = caseFacts.trim();
@@ -79,6 +80,51 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
         and who to notify first. This is the same engine that drives the Report Generator on the home page, so
         the recommendation matches what a full report would conclude.
       </p>
+
+      <div className="rounded-lg border border-border overflow-hidden">
+        <button
+          onClick={() => setShowGovernance(!showGovernance)}
+          className="w-full flex items-center gap-2 px-3.5 py-2.5 text-left hover:bg-muted/30 transition-colors"
+        >
+          <ShieldAlert className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <span className="text-xs font-medium text-foreground flex-1">
+            Using AI to recommend discipline? Know the rules before you rely on it.
+          </span>
+          <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform", showGovernance && "rotate-180")} />
+        </button>
+        {showGovernance && (
+          <div className="border-t border-border px-3.5 py-3 bg-muted/20">
+            <ul className="space-y-1.5 text-[11px] text-foreground/80">
+              <li>
+                • <strong className="text-foreground">A person has to actually read and weigh this</strong>, not
+                just click through it — treating an AI output as the automated decision itself is the single
+                biggest legal exposure across every current framework (Colorado's AI Act treats employment AI as
+                "high-risk"; every regime leans on genuine human review as the core safeguard).
+              </li>
+              <li>
+                • <strong className="text-foreground">Some states now require telling the employee AI was used</strong>{" "}
+                in a decision about them — e.g., Illinois, as of January 1, 2026. Check whether that applies before
+                you act on a recommendation.
+              </li>
+              <li>
+                • <strong className="text-foreground">NYC requires annual independent bias audits</strong> for tools
+                that meaningfully help make hiring, promotion, or discipline decisions — relevant if you start using
+                a tool like this routinely rather than case-by-case.
+              </li>
+              <li>
+                • <strong className="text-foreground">Federal EEOC enforcement of AI disparate-impact claims has
+                been deprioritized</strong>, but private lawsuits haven't gone away (see <em>Mobley v. Workday</em>),
+                and employers stay liable for what a third-party AI tool recommends — including this one.
+              </li>
+              <li>
+                • If you rely on this regularly, <strong className="text-foreground">periodically check whether its
+                recommendations skew by protected characteristics</strong> — that pattern is itself a legal risk,
+                independent of intent.
+              </li>
+            </ul>
+          </div>
+        )}
+      </div>
 
       <Textarea
         placeholder="Summarize what your investigation found: what happened, who was involved, what evidence you collected, what witnesses/the subject said, any prior violations…"
@@ -149,8 +195,8 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
       )}
 
       <p className="text-[10px] text-muted-foreground">
-        An AI-generated recommendation, not a final decision — review with HR/Legal before acting, especially for
-        anything beyond re-education.
+        An AI-generated recommendation, not a final decision. A person must meaningfully review it — and HR/Legal
+        must sign off — before anything beyond re-education happens.
       </p>
     </div>
   );

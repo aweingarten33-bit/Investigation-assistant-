@@ -16,7 +16,11 @@ interface Deadline {
   timeframe: string;
   title: string;
   whatToDo: string[];
+  // Either a live deadline's consequence, or — for a proposed/not-yet-final
+  // rule — a status note. `pending: true` swaps the red "if you miss it"
+  // alert for a neutral "watch this" one so it doesn't read as a live deadline.
   ifYouMiss: string;
+  pending?: boolean;
   source: string;
 }
 
@@ -141,6 +145,18 @@ const TIMELINE_SECTIONS: TimelineSection[] = [
         ],
         ifYouMiss: "The CE's responsibility doesn't wait for the BA. If your BA knew, your clock started.",
         source: "45 CFR §164.410",
+      },
+      {
+        timeframe: "Proposed — Not Yet Final",
+        title: "Watch: HHS notification may shorten to 72 hours",
+        whatToDo: [
+          "A 2024 HHS proposed rule (NPRM) would cut the HHS notification window from 60 days to 72 hours after discovery",
+          "This would apply to notifying HHS — individual notification would likely stay at 60 days",
+          "Not finalized as of mid-2026; a final rule isn't expected until late 2026 or 2027 at the earliest",
+        ],
+        ifYouMiss: "Not yet in effect — this is a heads-up, not a current deadline. Don't build your process around 72 hours yet, but don't assume 60 days is permanent either.",
+        pending: true,
+        source: "HHS NPRM (2024), not yet finalized — check HHS.gov for status",
       },
     ],
   },
@@ -311,7 +327,10 @@ export default function RegulatoryTimelines() {
                 {section.deadlines.map((d, i) => (
                   <div key={i} className="px-4 py-3.5">
                     <div className="flex items-start gap-2.5 mb-2">
-                      <span className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wide whitespace-nowrap rounded shrink-0">
+                      <span className={cn(
+                        "px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap rounded shrink-0",
+                        d.pending ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary"
+                      )}>
                         {d.timeframe}
                       </span>
                       <p className="text-sm font-semibold text-foreground">{d.title}</p>
@@ -326,10 +345,17 @@ export default function RegulatoryTimelines() {
                       ))}
                     </ul>
 
-                    <div className="flex items-start gap-2 px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-md mb-2">
-                      <Ban className="w-3 h-3 text-destructive shrink-0 mt-0.5" />
-                      <p className="text-[11px] text-foreground/90"><strong>If you miss it:</strong> {d.ifYouMiss}</p>
-                    </div>
+                    {d.pending ? (
+                      <div className="flex items-start gap-2 px-3 py-2 bg-muted/40 border border-border rounded-md mb-2">
+                        <Clock className="w-3 h-3 text-muted-foreground shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-foreground/90"><strong>Status:</strong> {d.ifYouMiss}</p>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2 px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-md mb-2">
+                        <Ban className="w-3 h-3 text-destructive shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-foreground/90"><strong>If you miss it:</strong> {d.ifYouMiss}</p>
+                      </div>
+                    )}
 
                     <p className="text-[10px] text-muted-foreground flex items-center gap-1">
                       <ExternalLink className="w-2.5 h-2.5" />
