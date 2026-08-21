@@ -40,12 +40,32 @@ Open `http://localhost:8080`.
 Set these where the API process runs (locally: `.env`; in production: your
 host's dashboard). None of them are needed by the frontend build.
 
+The AI backend is provider-agnostic. Pick one with `AI_PROVIDER` (defaults
+to `anthropic`) and set that provider's key + model — the other providers'
+variables can stay unset:
+
 ```sh
-ANTHROPIC_API_KEY=your_anthropic_key        # required
+AI_PROVIDER=anthropic                       # optional — anthropic (default) | openai | gemini
+
+ANTHROPIC_API_KEY=your_anthropic_key        # required if AI_PROVIDER=anthropic
 ANTHROPIC_MODEL=claude-sonnet-5             # optional, has a default
-CLASSIFICATION_SIGNING_SECRET=...           # optional, falls back to ANTHROPIC_API_KEY
+
+OPENAI_API_KEY=your_openai_key              # required if AI_PROVIDER=openai
+OPENAI_MODEL=gpt-4o                         # required if AI_PROVIDER=openai — no default, on purpose (see below)
+
+GEMINI_API_KEY=your_google_ai_key           # required if AI_PROVIDER=gemini
+GEMINI_MODEL=gemini-2.0-flash               # required if AI_PROVIDER=gemini — no default, on purpose (see below)
+
+CLASSIFICATION_SIGNING_SECRET=...           # optional, falls back to whichever provider key is set
 PORT=3000                                   # optional, Render sets this itself
 ```
+
+`OPENAI_MODEL`/`GEMINI_MODEL` have no built-in fallback. The original
+`ANTHROPIC_MODEL` default shipped with this app was a guessed value that
+turned out not to be a real model — every call silently 400'd until someone
+actually tried it against a live key. Rather than repeat that for two more
+providers, those two are required: get the exact model id from your
+provider's own docs/dashboard and set it explicitly.
 
 ## Deploying (Render)
 
@@ -56,13 +76,15 @@ One service, one deploy:
    reads `render.yaml` at the repo root and configures the service
    automatically — build (`npm ci && npm run build`), start
    (`npm start`, which runs `node server/index.js`).
-3. Render will prompt for `ANTHROPIC_API_KEY` (marked `sync: false` in
-   `render.yaml`) — paste your real key. This is a runtime server secret,
-   never baked into the frontend bundle.
+3. Render will prompt for every var marked `sync: false` in `render.yaml`
+   (see Environment variables above). You only need to fill in the key +
+   model for whichever `AI_PROVIDER` you're using — leave the rest blank.
+   These are runtime server secrets, never baked into the frontend bundle.
 4. Deploy. Render gives you a `*.onrender.com` URL serving the whole app.
 
-No `render.yaml` changes are needed for subsequent deploys — Render
-redeploys automatically on every push to the connected branch.
+For later pushes: Blueprint-created services don't always auto-redeploy
+reliably on every push — if a push doesn't show up, go to the Blueprint
+page in Render and click **Manual Sync**.
 
 ## Investigation Toolkit
 

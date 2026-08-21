@@ -1,5 +1,5 @@
 import express from "express";
-import { callClaudeStructured } from "../lib/anthropic.js";
+import { callStructured } from "../lib/ai.js";
 import { createRateLimiter, clientIp } from "../lib/rate-limit.js";
 
 const MAX_REPORT_TEXT_LENGTH = 100_000;
@@ -11,7 +11,21 @@ const isRateLimited = createRateLimiter();
 // The classification from step 1 round-trips through the client into step 2.
 // We sign it server-side so a tampered classification (e.g. a forged
 // recommendationTier) is rejected before it can shape the report prompt.
-const SIGNING_SECRET = process.env.CLASSIFICATION_SIGNING_SECRET || process.env.ANTHROPIC_API_KEY || "";
+// Falls back to whichever provider key is actually configured — with
+// multiple providers possible now, ANTHROPIC_API_KEY alone is no longer a
+// safe assumption to be set.
+const SIGNING_SECRET = process.env.CLASSIFICATION_SIGNING_SECRET
+  || process.env.ANTHROPIC_API_KEY
+  || process.env.OPENAI_API_KEY
+  || process.env.GEMINI_API_KEY
+  || "";
+
+if (!SIGNING_SECRET) {
+  console.error(
+    "WARNING: no CLASSIFICATION_SIGNING_SECRET and no provider API key found to derive one from — " +
+    "the classification integrity check is running with an empty key. Set CLASSIFICATION_SIGNING_SECRET.",
+  );
+}
 
 const VALID_DECISIONS = ["substantiated", "unsubstantiated", "needs_more_info"];
 const VALID_RISK = ["low", "moderate", "high", "critical"];
@@ -177,12 +191,8 @@ router.post("/", async (req, res) => {
       return res.status(413).json({ error: "Report text is too long. Maximum is 100,000 characters." });
     }
 
-    const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-    if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
-
     if (step === "classify") {
-      const classification = await callClaudeStructured(
-        ANTHROPIC_API_KEY,
+      const classification = await callStructured(
         CLASSIFICATION_PROMPT,
         `Classify the following investigation notes. Assess completeness, count violations, determine severity.\n\n---\n${reportText}\n---`,
         classificationSchema,
@@ -204,8 +214,7 @@ router.post("/", async (req, res) => {
       }
 
       const reportPrompt = buildReportPrompt(prevClassification);
-      const report = await callClaudeStructured(
-        ANTHROPIC_API_KEY,
+      const report = await callStructured(
         reportPrompt,
         `Write the Incident Investigation Report for the following investigation notes. Decision: ${prevClassification.decision.toUpperCase()}, Risk: ${prevClassification.riskLevel.toUpperCase()}. Write ONLY what the notes say.\n\n---\n${reportText}\n---`,
         reportSchema,

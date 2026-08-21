@@ -96,6 +96,53 @@ What changed, and why the findings above still hold:
   the browser. Same trust boundary as before, just a different process
   holding it.
 
+## Addendum: Multi-provider AI backend (2026-08-21)
+
+Added OpenAI and Gemini as selectable alternatives to Anthropic
+(`AI_PROVIDER=anthropic|openai|gemini`), motivated by a real outage: the
+account's Anthropic API access was unavailable, and there was no way to
+keep testing without a second provider to fall back to.
+
+- `server/lib/{anthropic,openai,gemini}.js` each implement the same two-
+  function interface (`callStructured`, `callText`); `server/lib/ai.js`
+  dispatches to whichever is selected. Routes call the dispatcher only —
+  no provider-specific code left in `server/routes/*`.
+- Each provider module owns its own key/model config and validates it
+  independently (clear `HttpError` if missing) rather than the route
+  hardcoding a single `ANTHROPIC_API_KEY` check, which is what this
+  replaces.
+- **Deliberately no default model for OpenAI or Gemini.** The prior
+  `ANTHROPIC_MODEL` default (`claude-sonnet-4-6`) was a guessed value that
+  was never actually valid — it shipped silently broken until someone hit
+  it with a real key (see the earlier fix in this history). Repeating that
+  guess for two more providers was the obvious wrong move immediately
+  after diagnosing it; `OPENAI_MODEL`/`GEMINI_MODEL` are required with no
+  fallback, so a missing model fails loudly and immediately instead of
+  looking like a working configuration.
+- **Error messages from all three providers now reach the user directly**
+  (`"<Provider> error (<status>): <their message>"`), not just server
+  logs — the previous opaque `"AI analysis failed (400)"` was the actual
+  bottleneck in diagnosing the Anthropic outage that motivated this whole
+  change; multiplying that opacity across three providers would have made
+  the next failure worse, not better.
+- `CLASSIFICATION_SIGNING_SECRET`'s fallback chain now checks all three
+  provider keys, not just `ANTHROPIC_API_KEY` — previously, running with
+  only `OPENAI_API_KEY` or `GEMINI_API_KEY` set would have left the HMAC
+  signing key silently empty. A startup log now warns loudly if no secret
+  can be derived at all.
+- **Not verified against live traffic** for OpenAI or Gemini specifically
+  — unlike the Supabase-removal migration, there's no working key for
+  either in the environment this was built in. Verified instead: correct
+  routing per `AI_PROVIDER`, correct missing-config errors for all three,
+  and a live non-2xx response (a network-proxy rejection, not a real
+  Anthropic/OpenAI response) confirming the fetch/error-parsing path
+  doesn't crash end to end. The request/response shapes for each
+  provider's chat-completions/generateContent APIs are implemented per
+  each provider's public docs but have not been exercised against a real
+  account. Treat the first real use of `openai`/`gemini` as the actual
+  test, and watch the error message it produces if it fails — that's the
+  fast path back to a fix now.
+
 ## Residual risks (not addressed here)
 
 - **Cost protection** still ultimately benefits from a gateway/WAF-level

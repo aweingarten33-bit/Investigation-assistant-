@@ -1,5 +1,5 @@
 import express from "express";
-import { callClaudeText, HttpError } from "../lib/anthropic.js";
+import { callText, HttpError } from "../lib/ai.js";
 import { createRateLimiter, clientIp } from "../lib/rate-limit.js";
 
 const MAX_FIELD_LENGTH = 20_000;
@@ -100,9 +100,6 @@ router.post("/", async (req, res) => {
   }
 
   try {
-    const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-    if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
-
     const { mode } = req.body;
 
     if (mode === "generate_letter") {
@@ -117,8 +114,7 @@ router.post("/", async (req, res) => {
         return res.status(413).json({ error: "Case details are too long." });
       }
 
-      const text = await callClaudeText(
-        ANTHROPIC_API_KEY,
+      const text = await callText(
         buildLetterPrompt(letterType),
         `Generate the letter for this case:\n\n---\n${caseDetails.trim()}\n---`,
       );
@@ -134,7 +130,7 @@ router.post("/", async (req, res) => {
         return res.status(413).json({ error: "Case facts are too long." });
       }
 
-      const text = await callClaudeText(ANTHROPIC_API_KEY, CASE_ANALYSIS_PROMPT, `## Case Facts\n${caseFacts.trim()}`);
+      const text = await callText(CASE_ANALYSIS_PROMPT, `## Case Facts\n${caseFacts.trim()}`);
       return res.json({ text });
     }
 

@@ -1,23 +1,19 @@
-export class HttpError extends Error {
-  constructor(message, status) {
-    super(message);
-    this.status = status;
-  }
-}
+import { HttpError } from "./errors.js";
 
 function model() {
-  // "claude-sonnet-4-6" (the old default here) isn't a real model ID — it
-  // was never actually exercised against a live key before now, which is
-  // exactly the 400 this replaces.
   return process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+}
+
+function apiKey() {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new HttpError("ANTHROPIC_API_KEY is not configured", 500);
+  return key;
 }
 
 // Anthropic's error bodies are small, safe-to-show validation messages
 // (e.g. "model: claude-x not found", "x-api-key header is required") — not
-// sensitive. Surfacing the real reason directly beats a bare status code,
-// which was the whole reason "AI analysis failed (400)" wasn't diagnosable
-// without digging through server logs.
-function describeAnthropicError(status, rawText) {
+// sensitive. Surfacing the real reason directly beats a bare status code.
+function describeError(status, rawText) {
   try {
     const parsed = JSON.parse(rawText);
     const msg = parsed?.error?.message;
@@ -31,13 +27,17 @@ function describeAnthropicError(status, rawText) {
   return trimmed ? `Anthropic error (${status}): ${trimmed.slice(0, 300)}` : `AI request failed (${status})`;
 }
 
+function statusFor(anthropicStatus) {
+  return anthropicStatus === 429 ? 429 : anthropicStatus === 529 ? 503 : 502;
+}
+
 // Structured output via forced tool-use — used by analyze-report for the
 // classify/report steps, which need a validated JSON shape back.
-export async function callClaudeStructured(apiKey, systemPrompt, userMessage, schema, toolName) {
+export async function callStructured(systemPrompt, userMessage, schema, toolName) {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
-      "x-api-key": apiKey,
+      "x-api-key": apiKey(),
       "anthropic-version": "2023-06-01",
       "content-type": "application/json",
     },
@@ -58,10 +58,7 @@ export async function callClaudeStructured(apiKey, systemPrompt, userMessage, sc
   if (!response.ok) {
     const text = await response.text();
     console.error("Anthropic API error:", response.status, text);
-    throw new HttpError(
-      describeAnthropicError(response.status, text),
-      response.status === 429 ? 429 : response.status === 529 ? 503 : 502,
-    );
+    throw new HttpError(describeError(response.status, text), statusFor(response.status));
   }
 
   const data = await response.json();
@@ -74,11 +71,11 @@ export async function callClaudeStructured(apiKey, systemPrompt, userMessage, sc
 }
 
 // Free-text output — used by the letter generator and case analysis tools.
-export async function callClaudeText(apiKey, systemPrompt, userMessage) {
+export async function callText(systemPrompt, userMessage) {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
-      "x-api-key": apiKey,
+      "x-api-key": apiKey(),
       "anthropic-version": "2023-06-01",
       "content-type": "application/json",
     },
@@ -93,10 +90,7 @@ export async function callClaudeText(apiKey, systemPrompt, userMessage) {
   if (!response.ok) {
     const text = await response.text();
     console.error("Anthropic API error:", response.status, text);
-    throw new HttpError(
-      describeAnthropicError(response.status, text),
-      response.status === 429 ? 429 : response.status === 529 ? 503 : 502,
-    );
+    throw new HttpError(describeError(response.status, text), statusFor(response.status));
   }
 
   const data = await response.json();
