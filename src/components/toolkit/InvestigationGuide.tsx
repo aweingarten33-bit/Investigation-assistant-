@@ -59,6 +59,7 @@ const PHASES: Phase[] = [
           "The investigator can NOT be: the subject, in the subject's chain of command, or personally connected to them",
           "If you have a conflict → escalate to your supervisor, compliance committee, or legal",
         ],
+        tip: "Use the Conflict of Interest toolkit (next section) to work through types, red flags, and how to handle it if you find one.",
       },
       {
         title: "Issue a document preservation hold",
@@ -95,6 +96,7 @@ const PHASES: Phase[] = [
           "Who do you need to interview?",
           "What's your timeline?",
         ],
+        tip: "Not sure what you're dealing with yet? Run the facts through AI Case Analysis for a quick preliminary read on regulations and risk while you build this plan.",
       },
       {
         title: "List all the evidence you need",
@@ -194,6 +196,7 @@ const PHASES: Phase[] = [
           "Know what you need to learn from THIS person specifically",
           "Know what facts you want to verify",
         ],
+        tip: "The Interview Templates section has copy-ready scripts for witness, subject, Upjohn, and HIPAA-specific interviews — start from those instead of a blank page.",
       },
       {
         title: "Upjohn Warning (if legal counsel is directing)",
@@ -330,6 +333,7 @@ const PHASES: Phase[] = [
           "EXTERNAL (if required): OCR, State AG, CMS, accreditor, law enforcement",
           "Mark it CONFIDENTIAL and PRIVILEGED (if applicable). Keep a distribution log.",
         ],
+        tip: "Check Regulatory Deadlines for exact filing windows (HIPAA's 60-day clock, self-disclosure), then use the AI Letter Generator to draft the subject, reporter, and any regulatory notifications.",
       },
       {
         title: "Create the corrective action plan",

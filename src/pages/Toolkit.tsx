@@ -20,14 +20,17 @@ interface ToolkitNavState {
   prefillCaseDetails?: string;
 }
 
+// Ordered to match the real lifecycle of an investigation — the same 7
+// phases walked through in the Investigation Guide below. Work top to
+// bottom and each section hands off to the next.
 const SECTIONS: { id: SectionId; label: string; description: string; icon: LucideIcon; isAI?: boolean }[] = [
-  { id: "ai-letters", label: "AI Letter Generator", description: "Draft determination & notification letters", icon: FileText, isAI: true },
-  { id: "ai-analysis", label: "AI Case Analysis", description: "Root cause, regulations & risk — quick read", icon: Search, isAI: true },
-  { id: "guide", label: "Investigation Guide", description: "7-phase, step-by-step walkthrough", icon: BookOpen },
-  { id: "timelines", label: "Regulatory Deadlines", description: "HIPAA & CFR-cited timelines", icon: Timer },
-  { id: "interviews", label: "Interview Templates", description: "Copy-ready scripts", icon: MessageSquare },
-  { id: "decisions", label: "Decision Framework", description: "Guided finding → discipline → notification", icon: Scale },
-  { id: "coi", label: "Conflict of Interest", description: "COI toolkit", icon: Handshake },
+  { id: "guide", label: "Investigation Guide", description: "Start here — the full 7-phase walkthrough", icon: BookOpen },
+  { id: "coi", label: "Conflict of Interest", description: "Phase 1 — check before you assign an investigator", icon: Handshake },
+  { id: "ai-analysis", label: "AI Case Analysis", description: "Phase 2–3 — quick regulatory read while you plan", icon: Search, isAI: true },
+  { id: "interviews", label: "Interview Templates", description: "Phase 4 — copy-ready interview scripts", icon: MessageSquare },
+  { id: "decisions", label: "Decision Framework", description: "Phase 5 — finding → discipline → notification", icon: Scale },
+  { id: "timelines", label: "Regulatory Deadlines", description: "Check what's due now that you've decided", icon: Timer },
+  { id: "ai-letters", label: "AI Letter Generator", description: "Phase 6 — draft the notification letters", icon: FileText, isAI: true },
 ];
 
 export default function Toolkit() {
@@ -76,12 +79,12 @@ export default function Toolkit() {
               Investigation Toolkit
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground leading-snug">
-              AI-powered letter drafting and case analysis, plus a complete investigator reference library.
+              Numbered 1–7, top to bottom — the same order as a real investigation, from first report to final letter.
             </p>
           </div>
 
           <div className="px-3 sm:px-5 py-4 sm:py-5 space-y-2">
-            {SECTIONS.map((section) => {
+            {SECTIONS.map((section, index) => {
               const isOpen = openSection === section.id;
               return (
                 <div
@@ -102,13 +105,18 @@ export default function Toolkit() {
                         : "bg-card hover:bg-secondary/30"
                     )}
                   >
-                    <div className={cn(
-                      "w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center shrink-0",
-                      isOpen
-                        ? "bg-primary text-primary-foreground"
-                        : section.isAI ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground"
-                    )}>
-                      {section.isAI ? <Sparkles className="w-4 h-4" /> : <section.icon className="w-4 h-4" />}
+                    <div className="relative shrink-0">
+                      <div className={cn(
+                        "w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center",
+                        isOpen
+                          ? "bg-primary text-primary-foreground"
+                          : section.isAI ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground"
+                      )}>
+                        {section.isAI ? <Sparkles className="w-4 h-4" /> : <section.icon className="w-4 h-4" />}
+                      </div>
+                      <span className="absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full bg-foreground text-background text-[9px] font-bold flex items-center justify-center ring-2 ring-card">
+                        {index + 1}
+                      </span>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
