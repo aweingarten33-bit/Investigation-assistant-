@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import mammoth from "mammoth";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -9,13 +10,15 @@ import { Disclaimer } from "@/components/Disclaimer";
 import { exportToDocx } from "@/lib/docx-export";
 import { AnalysisResult } from "@/lib/types";
 import { SAMPLE_REPORT_TEXT } from "@/lib/sample-report";
-import { Loader2, Download, Sparkles, FileText, RotateCcw, XCircle, ShieldCheck } from "lucide-react";
+import { suggestLetterType, buildLetterPrefillDetails, letterButtonLabel } from "@/lib/letter-prefill";
+import { Loader2, Download, Sparkles, FileText, RotateCcw, XCircle, ShieldCheck, Mail, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 
 const MIN_REPORT_LENGTH = 50;
 const MAX_REPORT_LENGTH = 100_000;
 
 const Index = () => {
+  const navigate = useNavigate();
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileSize, setFileSize] = useState<string | null>(null);
   const [reportText, setReportText] = useState<string>("");
@@ -167,6 +170,16 @@ const Index = () => {
     }
   }, [result]);
 
+  const handleDraftLetter = useCallback(() => {
+    if (!result) return;
+    navigate("/toolkit", {
+      state: {
+        prefillLetterType: suggestLetterType(result),
+        prefillCaseDetails: buildLetterPrefillDetails(result),
+      },
+    });
+  }, [result, navigate]);
+
   const hasContent = reportText.trim().length > 0;
 
   return (
@@ -187,6 +200,15 @@ const Index = () => {
                   New Analysis
                 </Button>
               </div>
+              {result.decision !== "needs_more_info" && (
+                <button
+                  onClick={handleDraftLetter}
+                  className="mt-2 w-full flex items-center justify-center gap-1.5 h-9 text-xs font-medium text-primary hover:text-primary/80 transition-colors rounded-lg border border-primary/20 bg-primary/5 hover:bg-primary/10"
+                >
+                  <Mail className="h-3.5 w-3.5" />
+                  {letterButtonLabel(suggestLetterType(result))}
+                </button>
+              )}
             </div>
             <AnalysisResults result={result} />
           </>
@@ -197,9 +219,18 @@ const Index = () => {
 
               {/* Card Header */}
               <div className="px-5 pt-4 pb-3 border-b border-border">
-                <h1 className="text-base sm:text-xl font-bold text-foreground mb-0.5">
-                  Compliance & Privacy Investigation Assistant
-                </h1>
+                <div className="flex items-start justify-between gap-3">
+                  <h1 className="text-base sm:text-xl font-bold text-foreground mb-0.5">
+                    Compliance & Privacy Investigation Assistant
+                  </h1>
+                  <Link
+                    to="/toolkit"
+                    className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary/10 transition-colors whitespace-nowrap"
+                  >
+                    <BookOpen className="h-3.5 w-3.5" />
+                    Toolkit
+                  </Link>
+                </div>
               <p className="text-xs sm:text-sm text-muted-foreground leading-snug">
                   Paste or upload your investigation notes to generate a Summary Investigative Report.
                 </p>

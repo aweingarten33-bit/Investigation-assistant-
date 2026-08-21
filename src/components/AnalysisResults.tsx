@@ -1,29 +1,12 @@
 import type React from "react";
-import { AnalysisResult, Decision, RiskLevel } from "@/lib/types";
+import { AnalysisResult } from "@/lib/types";
+import { ClassificationSummary } from "@/components/ClassificationSummary";
+import { NotifyChecklist } from "@/components/NotifyChecklist";
 import {
-  Shield, FileText, ListChecks, Briefcase, AlertTriangle,
+  FileText, ListChecks, Briefcase, AlertTriangle,
   Scale, BookOpen, Info, ChevronDown,
 } from "lucide-react";
 import { useState } from "react";
-
-const decisionStyles: Record<Decision, string> = {
-  substantiated: "bg-destructive text-destructive-foreground",
-  unsubstantiated: "bg-success text-success-foreground",
-  needs_more_info: "bg-warning text-warning-foreground",
-};
-
-const decisionLabels: Record<Decision, string> = {
-  substantiated: "SUBSTANTIATED",
-  unsubstantiated: "UNSUBSTANTIATED",
-  needs_more_info: "NEEDS MORE INFO",
-};
-
-const riskStyles: Record<RiskLevel, string> = {
-  low: "text-success",
-  moderate: "text-warning",
-  high: "text-destructive",
-  critical: "text-destructive font-black",
-};
 
 function Section({
   icon: Icon,
@@ -58,71 +41,7 @@ export function AnalysisResults({ result }: { result: AnalysisResult }) {
   return (
     <div className="space-y-3 fade-in">
       {/* Classification Summary */}
-      <div className="rounded-lg border border-border bg-card p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Shield className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Classification</h3>
-        </div>
-        <div className="flex flex-wrap gap-3 mb-4">
-          <span className={`inline-block rounded-md px-4 py-2 text-sm font-bold ${decisionStyles[result.decision]}`}>
-            {decisionLabels[result.decision]}
-          </span>
-          <span className={`inline-block rounded-md border border-border px-4 py-2 text-sm font-bold ${riskStyles[result.riskLevel]}`}>
-            {result.riskLevel.toUpperCase()} RISK
-          </span>
-          <span className="inline-block rounded-md border border-border px-4 py-2 text-sm font-medium text-muted-foreground">
-            Confidence: {result.confidenceScore}%
-          </span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-          <div>
-            <span className="text-muted-foreground">Violation Type:</span>{" "}
-            <span className="text-foreground font-medium">{result.violationType}</span>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Count:</span>{" "}
-            <span className="text-foreground font-medium">{result.violationCount}</span>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Recommendation:</span>{" "}
-            <span className="text-foreground font-medium">{result.recommendationTier.replace(/_/g, " ")}</span>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Notes:</span>{" "}
-            <span className="text-foreground font-medium">{result.notesCompleteness}</span>
-          </div>
-        </div>
-        {(result.aggravatingFactors.length > 0 || result.mitigatingFactors.length > 0) && (
-          <div className="mt-4 pt-4 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-            {result.aggravatingFactors.length > 0 && (
-              <div>
-                <span className="text-destructive font-medium text-xs uppercase tracking-wide">Aggravating</span>
-                <ul className="mt-1 space-y-1">
-                  {result.aggravatingFactors.map((f, i) => (
-                    <li key={i} className="flex gap-2 text-foreground">
-                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {result.mitigatingFactors.length > 0 && (
-              <div>
-                <span className="text-success font-medium text-xs uppercase tracking-wide">Mitigating</span>
-                <ul className="mt-1 space-y-1">
-                  {result.mitigatingFactors.map((f, i) => (
-                    <li key={i} className="flex gap-2 text-foreground">
-                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-success" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      <ClassificationSummary classification={result} />
 
       {/* Missing Info Alert */}
       {result.missingInfo && result.missingInfo.length > 0 && (
@@ -139,6 +58,13 @@ export function AnalysisResults({ result }: { result: AnalysisResult }) {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* Who to notify */}
+      {result.decision !== "needs_more_info" && (
+        <div className="rounded-lg border border-border bg-card p-5">
+          <NotifyChecklist decision={result.decision} />
         </div>
       )}
 
