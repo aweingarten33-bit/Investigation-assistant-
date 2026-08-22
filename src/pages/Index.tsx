@@ -1,6 +1,8 @@
 import { useState, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import mammoth from "mammoth";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
+import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { callApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { UploadZone } from "@/components/UploadZone";
@@ -24,12 +26,38 @@ import {
 import { toast } from "sonner";
 import { HomeToolkitMenuButton } from "@/components/ToolkitMenu";
 
+GlobalWorkerOptions.workerSrc = pdfWorker;
+
 const MIN_REPORT_LENGTH = 50;
 const MAX_REPORT_LENGTH = 100_000;
 const MAX_ORG_CONTEXT = 20_000;
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 const MAX_UPLOAD_FILES = 12;
 const ANALYSIS_VERSION = "investigation-assistant-personal-v3";
+
+async function extractPdfText(file: File): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const loadingTask = getDocument({
+    data: new Uint8Array(arrayBuffer),
+    isEvalSupported: false,
+  });
+  const pdf = await loadingTask.promise;
+  const pages: string[] = [];
+
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+    const page = await pdf.getPage(pageNumber);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items
+      .map((item) => ("str" in item ? item.str : ""))
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (pageText) pages.push(`[PDF Page ${pageNumber}] ${pageText}`);
+  }
+
+  return pages.join("\n");
+}
 
 const Index = () => {
   const navigate = useNavigate();
@@ -81,10 +109,10 @@ const Index = () => {
 
     const unsupported = selected.filter((file) => {
       const lower = file.name.toLowerCase();
-      return !(lower.endsWith(".docx") || lower.endsWith(".txt") || lower.endsWith(".csv"));
+      return !(lower.endsWith(".docx") || lower.endsWith(".pdf"));
     });
     if (unsupported.length) {
-      toast.error("Supported source files are .docx, .txt, and .csv.");
+      toast.error("Investigation source uploads support DOCX and PDF only.");
       return;
     }
 
@@ -96,23 +124,25 @@ const Index = () => {
 
     try {
       const chunks: string[] = [];
+      const unreadablePdfs: string[] = [];
+
       for (const file of selected) {
+        const lower = file.name.toLowerCase();
         let value = "";
-        if (file.name.toLowerCase().endsWith(".docx")) {
+
+        if (lower.endsWith(".docx")) {
           const arrayBuffer = await file.arrayBuffer();
           const extracted = await mammoth.extractRawText({ arrayBuffer });
           value = extracted.value;
         } else {
-          value = await file.text();
+          value = await extractPdfText(file);
+          if (!value.trim()) unreadablePdfs.push(file.name);
         }
 
         const sourceName = file.name.replace(/\s+/g, " ").trim();
         const normalized = value.replace(/\r\n/g, "\n").trim();
         if (!normalized) continue;
 
-        // Prefix each source line so the evidence mapper can preserve the
-        // originating filename even after all uploaded material is combined
-        // into the single line-numbered investigation record.
         const labeled = normalized
           .split("\n")
           .map((line) => `[Source: ${sourceName}] ${line}`.trimEnd())
@@ -121,8 +151,12 @@ const Index = () => {
       }
 
       if (!chunks.length) {
-        toast.error("No readable text was found in the selected source files.");
+        toast.error("No readable text was found. Scanned/image-only PDFs need OCR before they can be analyzed.");
         return;
+      }
+
+      if (unreadablePdfs.length) {
+        toast.warning(`No selectable text was found in: ${unreadablePdfs.join(", ")}. Those PDF(s) were skipped.`);
       }
 
       setReportText(chunks.join("\n\n"));
@@ -132,7 +166,7 @@ const Index = () => {
       setIsSample(false);
       setResult(null);
     } catch {
-      toast.error("Failed to extract text from one or more source files.");
+      toast.error("Failed to extract text from one or more DOCX/PDF source files.");
     }
   }, []);
 
@@ -310,7 +344,7 @@ const Index = () => {
                   <HomeToolkitMenuButton />
                   <h1 className="text-base sm:text-xl font-bold text-foreground mb-0.5">Compliance & Privacy Investigation Assistant</h1>
                 </div>
-                <p className="text-xs sm:text-sm text-muted-foreground leading-snug">Paste notes or upload investigation sources to map the evidence, identify contradictions, assess the finding, generate the report, and tell you exactly what to investigate next.</p>
+                <p className="text-xs sm:text-sm text-muted-foreground leading-snug">Paste notes or upload DOCX/PDF investigation sources to map the evidence, identify contradictions, assess the finding, generate the report, and tell you exactly what to investigate next.</p>
                 <PiiReminder />
               </div>
 
@@ -362,7 +396,7 @@ const Index = () => {
                 <Button onClick={handleCancel} variant="ghost" className="w-full h-9 text-sm text-muted-foreground hover:text-destructive"><XCircle className="mr-2 h-4 w-4" />Cancel</Button>
               )}
 
-              {!hasContent && !isAnalyzing && <p className="text-xs text-muted-foreground text-center">Paste notes or upload one or more .docx/.txt/.csv source files to get started</p>}
+              {!hasContent && !isAnalyzing && <p className="text-xs text-muted-foreground text-center">Paste notes or upload one or more DOCX/PDF source files to get started</p>}
             </div>
 
             <div className="mt-3"><Disclaimer /></div>
