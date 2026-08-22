@@ -5,6 +5,7 @@ export type EvidenceType = "document" | "interview" | "audit" | "system_record" 
 export type EvidenceStance = "supports" | "contradicts" | "context";
 export type EvidenceStatus = "corroborated" | "supported" | "single_source" | "contradicted" | "insufficient";
 export type DisciplineImpact = "mitigating" | "neutral" | "aggravating" | "unknown";
+export type HumanReviewStatus = "approved" | "approved_with_changes" | "needs_more_info" | "rejected";
 
 export interface Source {
   url: string;
@@ -52,6 +53,16 @@ export interface DisciplineRange {
   requiresHrLegalReview: boolean;
 }
 
+export interface HumanReviewRecord {
+  reviewerName: string;
+  reviewerRole: string;
+  status: HumanReviewStatus;
+  finalFinding: string;
+  finalAction: string;
+  rationale: string;
+  reviewedAt: string;
+}
+
 export interface AnalysisResult {
   // Classification / decision support
   decision: Decision;
@@ -79,6 +90,9 @@ export interface AnalysisResult {
   recommendations: string;
   conclusion: string;
   missingInfo: string[] | null;
+
+  // Human review (client-side until an enterprise case store is added)
+  humanReview?: HumanReviewRecord;
 
   // Client-side
   caseId: string;
