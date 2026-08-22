@@ -195,12 +195,12 @@ export default function HospitalInvestigationPlaybooks() {
 
   return (
     <div className="mt-6 space-y-3">
-      <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+      <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 max-w-prose">
         <div className="flex items-start gap-2.5">
           <Hospital className="h-5 w-5 text-primary mt-0.5 shrink-0" />
           <div>
             <h3 className="text-sm font-bold text-foreground">Hospital Investigation Quick Plays</h3>
-            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Use these when a hospital complaint lands in front of you. They focus on the evidence to preserve, the questions that actually decide the case, and the traps that create bad findings.</p>
+            <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">Use these when a hospital complaint lands in front of you. They focus on the evidence to preserve, the questions that actually decide the case, and the traps that create bad findings.</p>
           </div>
         </div>
       </div>
@@ -211,25 +211,25 @@ export default function HospitalInvestigationPlaybooks() {
           <div key={playbook.id} className="rounded-xl border border-border bg-card overflow-hidden">
             <button type="button" onClick={() => setOpen(isOpen ? null : playbook.id)} className="w-full p-4 flex items-start gap-3 text-left hover:bg-muted/20 transition-colors">
               <ShieldCheck className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 max-w-prose">
                 <p className="text-sm font-semibold text-foreground">{playbook.title}</p>
-                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">{playbook.trigger}</p>
+                <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">{playbook.trigger}</p>
               </div>
               <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
             </button>
             {isOpen && (
-              <div className="border-t border-border p-4 space-y-4">
+              <div className="border-t border-border p-4 space-y-5 max-w-prose">
                 <div>
                   <p className="text-[10px] uppercase tracking-wide font-semibold text-primary mb-2">Preserve / pull first</p>
-                  <ul className="space-y-1.5">{playbook.preserve.map((item, i) => <li key={i} className="text-xs text-foreground flex gap-2"><span>•</span><span>{item}</span></li>)}</ul>
+                  <ul className="space-y-2">{playbook.preserve.map((item, i) => <li key={i} className="text-sm text-foreground leading-relaxed flex gap-2"><span>•</span><span>{item}</span></li>)}</ul>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-wide font-semibold text-primary mb-2">Questions that decide the case</p>
-                  <ul className="space-y-1.5">{playbook.questions.map((item, i) => <li key={i} className="text-xs text-foreground flex gap-2"><span>•</span><span>{item}</span></li>)}</ul>
+                  <ul className="space-y-2">{playbook.questions.map((item, i) => <li key={i} className="text-sm text-foreground leading-relaxed flex gap-2"><span>•</span><span>{item}</span></li>)}</ul>
                 </div>
                 <div className="rounded-lg border border-warning/30 bg-warning/5 p-3">
                   <p className="text-[10px] uppercase tracking-wide font-semibold text-warning mb-2 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" />Watch-outs</p>
-                  <ul className="space-y-1.5">{playbook.watch.map((item, i) => <li key={i} className="text-xs text-foreground flex gap-2"><span>•</span><span>{item}</span></li>)}</ul>
+                  <ul className="space-y-2">{playbook.watch.map((item, i) => <li key={i} className="text-sm text-foreground leading-relaxed flex gap-2"><span>•</span><span>{item}</span></li>)}</ul>
                 </div>
               </div>
             )}

@@ -327,13 +327,13 @@ export default function InvestigationGuide() {
         <Scale className="w-5 h-5 text-primary" />
         <h2 className="text-lg font-bold text-foreground">Investigation Guide</h2>
       </div>
-      <p className="text-xs text-muted-foreground -mt-3">
+      <p className="text-sm text-muted-foreground leading-relaxed max-w-prose -mt-3">
         A practical hospital/compliance investigation sequence. Use the phases as a framework, not a rigid script; urgent safety, preservation, and reporting duties can change the order.
       </p>
 
-      <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/5 p-3">
+      <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/5 p-3 max-w-prose">
         <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
-        <p className="text-[11px] text-foreground leading-relaxed">
+        <p className="text-sm text-foreground leading-relaxed">
           <strong>Important:</strong> no single workflow fits every privacy, billing, patient-safety, employment, medical-staff, or criminal matter. Follow the applicable law/policy and involve the right function when the facts require it.
         </p>
       </div>
@@ -363,30 +363,30 @@ export default function InvestigationGuide() {
 
               {isOpen && (
                 <div className="border-t border-border">
-                  <div className="px-4 py-2.5 bg-primary/5 border-b border-border/50">
-                    <p className="text-xs text-foreground font-medium">{phase.tldr}</p>
+                  <div className="px-4 py-3 bg-primary/5 border-b border-border/50">
+                    <p className="text-sm text-foreground font-medium leading-relaxed max-w-prose">{phase.tldr}</p>
                   </div>
                   <div className="divide-y divide-border/50">
                     {phase.steps.map((step, i) => (
-                      <div key={i} className="px-4 py-3">
+                      <div key={i} className="px-4 py-4">
                         <div className="flex items-start gap-2.5">
                           <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
                             <span className="text-[10px] font-bold text-primary">{i + 1}</span>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-foreground mb-1.5">{step.title}</p>
-                            <ul className="space-y-1">
+                          <div className="flex-1 min-w-0 max-w-prose">
+                            <p className="text-sm font-semibold text-foreground mb-2">{step.title}</p>
+                            <ul className="space-y-2">
                               {step.bullets.map((bullet, j) => (
-                                <li key={j} className="flex items-start gap-2 text-xs text-foreground/80">
+                                <li key={j} className="flex items-start gap-2 text-sm text-foreground/90 leading-relaxed">
                                   <span className="text-muted-foreground mt-0.5 shrink-0">•</span>
                                   <span>{bullet}</span>
                                 </li>
                               ))}
                             </ul>
                             {step.tip && (
-                              <div className="flex items-start gap-2 mt-2 px-3 py-2 bg-warning/10 border border-warning/30 rounded-md">
+                              <div className="flex items-start gap-2 mt-3 px-3 py-2.5 bg-warning/10 border border-warning/30 rounded-md">
                                 <Lightbulb className="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />
-                                <p className="text-[11px] text-foreground/90">{step.tip}</p>
+                                <p className="text-sm text-foreground leading-relaxed">{step.tip}</p>
                               </div>
                             )}
                           </div>

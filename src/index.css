@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -20,11 +18,16 @@
     --muted-foreground: 215 18% 38%;
     --accent: 217 91% 94%;
     --accent-foreground: 217 91% 35%;
-    --destructive: 0 72% 51%;
+    /* destructive/warning/success are darkened from their original lightness
+       (51%/44%/35%) so text set in these colors clears WCAG AA's 4.5:1
+       contrast minimum against the app's light background/card — the
+       original values only reached ~2-3.5:1, which is hard to read and
+       adds visual strain on top of an already text-heavy app. */
+    --destructive: 0 72% 43%;
     --destructive-foreground: 0 0% 100%;
-    --success: 142 71% 35%;
+    --success: 142 71% 26%;
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 44%;
+    --warning: 38 92% 27%;
     --warning-foreground: 0 0% 100%;
     --border: 218 20% 78%;
     --input: 218 25% 82%;
@@ -52,10 +55,10 @@
     -webkit-tap-highlight-color: transparent;
   }
   h1, h2, h3 {
-    font-family: 'Cinzel', Arial, sans-serif;
+    /* Plain sans-serif instead of a decorative display serif: easier to
+       scan and read for anyone dyslexic, low-vision, or just tired of a
+       text-heavy page — matches the body font rather than fighting it. */
     font-weight: 700 !important;
-    letter-spacing: 0.02em;
-    font-synthesis: none;
   }
 }
 
