@@ -1,12 +1,13 @@
 import type React from "react";
+import { useState } from "react";
 import { AnalysisResult } from "@/lib/types";
 import { ClassificationSummary } from "@/components/ClassificationSummary";
+import { EvidenceTraceability } from "@/components/EvidenceTraceability";
 import { NotifyChecklist } from "@/components/NotifyChecklist";
 import {
   FileText, ListChecks, Briefcase, AlertTriangle,
-  Scale, BookOpen, Info, ChevronDown,
+  Scale, BookOpen, Info, ChevronDown, FileSearch,
 } from "lucide-react";
-import { useState } from "react";
 
 function Section({
   icon: Icon,
@@ -40,10 +41,20 @@ function Section({
 export function AnalysisResults({ result }: { result: AnalysisResult }) {
   return (
     <div className="space-y-3 fade-in">
-      {/* Classification Summary */}
       <ClassificationSummary classification={result} sources={result.sources} />
 
-      {/* Missing Info Alert */}
+      {(result.evidenceItems.length > 0 || result.findings.length > 0) && (
+        <Section icon={FileSearch} title="Evidence Workbench">
+          <EvidenceTraceability
+            evidenceItems={result.evidenceItems}
+            findings={result.findings}
+            disciplineFactors={result.disciplineFactors}
+            disciplineRange={result.disciplineRange}
+            policyQuestions={result.policyQuestions}
+          />
+        </Section>
+      )}
+
       {result.missingInfo && result.missingInfo.length > 0 && (
         <div className="rounded-lg border border-warning/30 bg-warning/5 p-5">
           <div className="flex items-center gap-2 mb-3">
@@ -61,14 +72,12 @@ export function AnalysisResults({ result }: { result: AnalysisResult }) {
         </div>
       )}
 
-      {/* Who to notify */}
       {result.decision !== "needs_more_info" && (
         <div className="rounded-lg border border-border bg-card p-5">
           <NotifyChecklist decision={result.decision} />
         </div>
       )}
 
-      {/* Report Sections */}
       <Section icon={Info} title="I. Introduction">
         <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{result.introduction}</p>
       </Section>
@@ -82,6 +91,7 @@ export function AnalysisResults({ result }: { result: AnalysisResult }) {
       </Section>
 
       <Section icon={Scale} title="IV. Investigation Findings">
+        <p className="text-[11px] text-muted-foreground mb-3">Formal report language. Use the Evidence Workbench above to inspect the exact support and contradictions behind each decision-support finding.</p>
         <ul className="space-y-2">
           {result.investigationFindings.map((finding, i) => (
             <li key={i} className="flex gap-2 text-sm text-foreground">
@@ -98,6 +108,7 @@ export function AnalysisResults({ result }: { result: AnalysisResult }) {
 
       {result.regulationsCited.length > 0 && (
         <Section icon={Briefcase} title="Regulations Cited" defaultOpen={false}>
+          <p className="text-[11px] text-muted-foreground mb-2">Verify cited provisions before official use; the report generator is instructed to omit citations when applicability is uncertain.</p>
           <ul className="space-y-1.5">
             {result.regulationsCited.map((reg, i) => (
               <li key={i} className="flex gap-2 text-sm text-foreground">
