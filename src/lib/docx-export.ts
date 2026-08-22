@@ -17,13 +17,28 @@ export async function exportToDocx(result: AnalysisResult) {
   children.push(new Paragraph({ children: [new TextRun({ text: "Compliance Investigation Report", bold: true, size: 36, color: "2563EB", font: "Arial" })], spacing: { after: 100 } }));
   children.push(new Paragraph({ children: [new TextRun({ text: `Case: ${result.caseId}`, size: 22, color: "646464", font: "Arial" })], spacing: { after: 50 } }));
   children.push(new Paragraph({ children: [new TextRun({ text: `Generated: ${new Date().toLocaleString()}`, size: 22, color: "646464", font: "Arial" })], spacing: { after: 50 } }));
-  children.push(new Paragraph({ children: [new TextRun({ text: `Decision: ${decisionLabel}  |  Risk: ${result.riskLevel.toUpperCase()}  |  Confidence: ${result.confidenceScore}%`, size: 22, color: "646464", font: "Arial" })], spacing: { after: 200 } }));
+  children.push(new Paragraph({ children: [new TextRun({ text: `AI decision support: ${decisionLabel}  |  Risk: ${result.riskLevel.toUpperCase()}  |  Confidence: ${result.confidenceScore}%`, size: 22, color: "646464", font: "Arial" })], spacing: { after: 200 } }));
   children.push(new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" } }, spacing: { after: 200 } }));
 
-  children.push(heading("DECISION SUPPORT"));
+  if (result.humanReview) {
+    children.push(heading("HUMAN REVIEW — FINAL RECORDED DISPOSITION"));
+    children.push(paragraph(`Reviewer: ${result.humanReview.reviewerName} (${result.humanReview.reviewerRole})`));
+    children.push(paragraph(`Review status: ${result.humanReview.status.replace(/_/g, " ")}`));
+    children.push(paragraph(`Final human finding: ${result.humanReview.finalFinding}`));
+    children.push(paragraph(`Final action / disposition: ${result.humanReview.finalAction}`));
+    children.push(paragraph(`Human rationale: ${result.humanReview.rationale}`));
+    children.push(paragraph(`Reviewed at: ${new Date(result.humanReview.reviewedAt).toLocaleString()}`));
+    children.push(spacer());
+  } else {
+    children.push(heading("HUMAN REVIEW STATUS"));
+    children.push(paragraph("No final human review record was saved before export. The AI analysis and corrective-action range below are decision support only and must not be treated as an authorized employment decision."));
+    children.push(spacer());
+  }
+
+  children.push(heading("AI DECISION SUPPORT"));
   children.push(new Paragraph({ children: [new TextRun({ text: decisionLabel, bold: true, size: 32, color: decisionColor, font: "Arial" })], spacing: { after: 100 } }));
   children.push(paragraph(`Corrective-action range: ${result.disciplineRange.minimum} to ${result.disciplineRange.maximum}`));
-  children.push(paragraph(`Recommended for review: ${result.disciplineRange.recommended}`));
+  children.push(paragraph(`Recommended for human review: ${result.disciplineRange.recommended}`));
   children.push(paragraph(result.disciplineRange.rationale));
   if (result.disciplineRange.policyDependent) children.push(paragraph("Final action is policy-dependent and requires review of organization-specific policy, precedent, prior history, and/or CBA/union requirements."));
 
@@ -90,7 +105,7 @@ export async function exportToDocx(result: AnalysisResult) {
     children.push(spacer());
   }
 
-  children.push(heading("V. RECOMMENDATIONS"));
+  children.push(heading("V. RECOMMENDATIONS / DECISION SUPPORT"));
   children.push(paragraph(result.recommendations));
 
   if (result.regulationsCited.length > 0) {
