@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, Link } from "react-router-dom";
 import {
-  ArrowLeft, ChevronRight, BookOpen, MessageSquare, Scale, Timer, Handshake,
+  ArrowLeft, Menu, X, BookOpen, MessageSquare, Scale, Timer, Handshake,
   Sparkles, FileText, Search, Gavel, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -66,18 +66,24 @@ export default function Toolkit() {
 
   const [activeSection, setActiveSection] = useState<SectionId>(initialPrefill ? "ai-letters" : "guide");
   const [letterPrefill, setLetterPrefill] = useState<LetterPrefill | null>(initialPrefill);
-  // Mobile only: which of the two full screens is showing. Desktop always
-  // shows the sidebar + content pane together, so this is ignored there.
-  const [mobileView, setMobileView] = useState<"menu" | "detail">(initialPrefill ? "detail" : "menu");
+  // Mobile only: the content pane is always what's on screen. The menu is
+  // an overlay drawer triggered by the hamburger button, not a separate page.
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: initialPrefill ? "auto" : "smooth" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection]);
 
+  // Lock background scroll while the mobile drawer is open.
+  useEffect(() => {
+    document.body.style.overflow = drawerOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [drawerOpen]);
+
   const selectSection = (id: SectionId) => {
     setActiveSection(id);
-    setMobileView("detail");
+    setDrawerOpen(false);
   };
 
   const openLetterSection = (letterType: string | undefined, caseDetails: string) => {
@@ -104,69 +110,101 @@ export default function Toolkit() {
   const activeIndex = SECTIONS.findIndex((s) => s.id === activeSection);
   const active = SECTIONS[activeIndex];
 
+  const NavList = ({ onSelect }: { onSelect: (id: SectionId) => void }) => (
+    <div className="rounded-2xl bg-background neu-raised overflow-hidden divide-y divide-border">
+      {SECTIONS.map((section) => {
+        const isActive = section.id === activeSection;
+        return (
+          <button
+            key={section.id}
+            onClick={() => onSelect(section.id)}
+            className={cn(
+              "w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors",
+              isActive ? "bg-primary/10" : "bg-card hover:bg-secondary/30 active:bg-secondary/30"
+            )}
+          >
+            <SectionIcon section={section} active={isActive} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className={cn("text-sm font-semibold truncate", isActive ? "text-primary" : "text-foreground")}>
+                  {section.label}
+                </p>
+                {section.isAI && (
+                  <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold tracking-wide uppercase">AI</span>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground truncate">{section.description}</p>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-[1000px] px-4 py-3 sm:py-10">
-        {/* ── Mobile (below sm): one full screen at a time ─────────────────── */}
+        {/* ── Mobile (below sm): hamburger + always-visible content pane ───── */}
         <div className="sm:hidden">
-          {mobileView === "menu" ? (
-            <>
-              <div className="mb-3">
-                <Link
-                  to="/"
-                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  Back to Report Generator
-                </Link>
-                <h1 className="text-lg font-bold text-foreground mb-0.5">Investigation Toolkit</h1>
-                <p className="text-xs text-muted-foreground leading-snug">
-                  Same order as a real investigation — tap a step to open it.
-                </p>
+          <div className="flex items-center gap-2 mb-3 sticky top-0 z-10 bg-background/95 backdrop-blur -mx-4 px-4 py-2">
+            <button
+              onClick={() => setDrawerOpen(true)}
+              className="shrink-0 w-9 h-9 rounded-lg bg-card neu-button flex items-center justify-center text-foreground"
+              aria-label="Open toolkit menu"
+            >
+              <Menu className="w-4.5 h-4.5" />
+            </button>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold leading-none">
+                Step {activeIndex + 1} of {SECTIONS.length}
+              </p>
+              <div className="flex items-center gap-1.5">
+                <h1 className="text-sm font-bold text-foreground truncate">{active.label}</h1>
+                {active.isAI && (
+                  <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold tracking-wide uppercase">AI</span>
+                )}
               </div>
-              <div className="rounded-2xl bg-background neu-raised overflow-hidden divide-y divide-border">
-                {SECTIONS.map((section) => (
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-background neu-raised overflow-hidden">
+            <div className="bg-card px-3 py-4">
+              {SECTION_CONTENT[activeSection]}
+            </div>
+          </div>
+
+          {/* Drawer overlay */}
+          {drawerOpen && (
+            <div className="fixed inset-0 z-50">
+              <div
+                className="absolute inset-0 bg-foreground/40 backdrop-blur-sm"
+                onClick={() => setDrawerOpen(false)}
+              />
+              <div className="absolute inset-y-0 left-0 w-[85%] max-w-[340px] bg-background shadow-2xl overflow-y-auto animate-in slide-in-from-left duration-200">
+                <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                  <div>
+                    <Link
+                      to="/"
+                      className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-1.5"
+                    >
+                      <ArrowLeft className="h-3.5 w-3.5" />
+                      Back to Report Generator
+                    </Link>
+                    <h2 className="text-base font-bold text-foreground">Investigation Toolkit</h2>
+                  </div>
                   <button
-                    key={section.id}
-                    onClick={() => selectSection(section.id)}
-                    className="w-full flex items-center gap-3 px-4 py-3.5 text-left bg-card active:bg-secondary/30 transition-colors"
+                    onClick={() => setDrawerOpen(false)}
+                    className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary/50"
+                    aria-label="Close menu"
                   >
-                    <SectionIcon section={section} active={false} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-foreground">{section.label}</p>
-                        {section.isAI && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold tracking-wide uppercase">AI</span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">{section.description}</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <X className="w-4.5 h-4.5" />
                   </button>
-                ))}
-              </div>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => setMobileView("menu")}
-                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-3"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Toolkit — Step {activeIndex + 1} of {SECTIONS.length}
-              </button>
-              <div className="rounded-2xl bg-background neu-raised overflow-hidden">
-                <div className="px-4 pt-4 pb-3 border-b border-border flex items-center gap-2">
-                  <h2 className="text-base font-semibold text-foreground">{active.label}</h2>
-                  {active.isAI && (
-                    <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold tracking-wide uppercase">AI</span>
-                  )}
                 </div>
-                <div className="bg-card px-3 py-4">
-                  {SECTION_CONTENT[activeSection]}
+                <div className="p-3">
+                  <NavList onSelect={selectSection} />
                 </div>
               </div>
-            </>
+            </div>
           )}
         </div>
 
@@ -187,34 +225,8 @@ export default function Toolkit() {
           </div>
 
           <div className="flex gap-4">
-            <nav className="w-72 shrink-0">
-              <div className="rounded-2xl bg-background neu-raised overflow-hidden divide-y divide-border sticky top-6">
-                {SECTIONS.map((section) => {
-                  const isActive = section.id === activeSection;
-                  return (
-                    <button
-                      key={section.id}
-                      onClick={() => setActiveSection(section.id)}
-                      className={cn(
-                        "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
-                        isActive ? "bg-primary/10" : "bg-card hover:bg-secondary/30"
-                      )}
-                    >
-                      <SectionIcon section={section} active={isActive} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className={cn("text-sm font-semibold truncate", isActive ? "text-primary" : "text-foreground")}>
-                            {section.label}
-                          </p>
-                          {section.isAI && (
-                            <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold tracking-wide uppercase">AI</span>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+            <nav className="w-72 shrink-0 sticky top-6 self-start">
+              <NavList onSelect={setActiveSection} />
             </nav>
 
             <div className="flex-1 min-w-0 rounded-2xl bg-background neu-raised overflow-hidden">
