@@ -27,16 +27,14 @@ jobs:
         run: npm ci
 
       - name: Apply non-breaking production audit fixes
-        run: npm audit fix --omit=dev
+        shell: bash
+        run: npm audit fix --omit=dev || true
 
-      - name: Verify high-severity production audit is clean
-        run: npm audit --omit=dev --audit-level=high
-
-      - name: Commit repaired dependency metadata
+      - name: Commit available dependency repairs
         shell: bash
         run: |
           if git diff --quiet -- package.json package-lock.json; then
-            echo "Production dependency metadata already current."
+            echo "No non-breaking dependency metadata changes were available."
             exit 0
           fi
           git config user.name "github-actions[bot]"
@@ -44,3 +42,6 @@ jobs:
           git add package.json package-lock.json
           git commit -m "Repair production dependency vulnerabilities"
           git push origin HEAD:investigative-workbench-overhaul
+
+      - name: Verify high-severity production audit
+        run: npm audit --omit=dev --audit-level=high
