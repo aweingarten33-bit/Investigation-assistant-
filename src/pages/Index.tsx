@@ -1,15 +1,20 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import mammoth from "mammoth";
 import { callApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { UploadZone } from "@/components/UploadZone";
 import { AnalysisResults } from "@/components/AnalysisResults";
 import { PiiReminder } from "@/components/PiiReminder";
 import { Disclaimer } from "@/components/Disclaimer";
+import { OrganizationDisciplineMatrix } from "@/components/OrganizationDisciplineMatrix";
 import { exportToDocx } from "@/lib/docx-export";
 import { AnalysisResult, HumanReviewRecord } from "@/lib/types";
+import {
+  buildOrganizationContext,
+  EMPTY_ORGANIZATION_DISCIPLINE_CONFIG,
+  type OrganizationDisciplineConfig,
+} from "@/lib/organization-context";
 import { SAMPLE_REPORT_TEXT } from "@/lib/sample-report";
 import { suggestLetterType, buildLetterPrefillDetails, letterButtonLabel } from "@/lib/letter-prefill";
 import {
@@ -28,7 +33,7 @@ const Index = () => {
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileSize, setFileSize] = useState<string | null>(null);
   const [reportText, setReportText] = useState<string>("");
-  const [organizationContext, setOrganizationContext] = useState("");
+  const [organizationConfig, setOrganizationConfig] = useState<OrganizationDisciplineConfig>({ ...EMPTY_ORGANIZATION_DISCIPLINE_CONFIG });
   const [showOrgContext, setShowOrgContext] = useState(false);
   const [isSample, setIsSample] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -36,6 +41,8 @@ const Index = () => {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const runIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+
+  const organizationContext = useMemo(() => buildOrganizationContext(organizationConfig), [organizationConfig]);
 
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
@@ -52,7 +59,7 @@ const Index = () => {
   const handleReset = useCallback(() => {
     invalidateRun();
     setReportText("");
-    setOrganizationContext("");
+    setOrganizationConfig({ ...EMPTY_ORGANIZATION_DISCIPLINE_CONFIG });
     setShowOrgContext(false);
     setFileName(null);
     setFileSize(null);
@@ -126,7 +133,7 @@ const Index = () => {
       return;
     }
     if (trimmedOrganizationContext.length > MAX_ORG_CONTEXT) {
-      toast.error("Organization context must be under 20,000 characters.");
+      toast.error("Organization discipline context must be under 20,000 characters.");
       return;
     }
 
@@ -275,19 +282,13 @@ const Index = () => {
               <div className="border-t border-border">
                 <button type="button" onClick={() => setShowOrgContext((value) => !value)} className="w-full px-5 py-3 flex items-center gap-2 text-left hover:bg-muted/20 transition-colors">
                   <Building2 className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-xs font-medium text-foreground flex-1">Organization-specific discipline rules (optional)</span>
+                  <span className="text-xs font-medium text-foreground flex-1">Organization-specific discipline matrix (optional; recommended)</span>
                   <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showOrgContext ? "rotate-180" : ""}`} />
                 </button>
                 {showOrgContext && (
-                  <div className="px-5 pb-4 space-y-2">
-                    <p className="text-[11px] text-muted-foreground">Paste applicable policy language, disciplinary matrix rules, anonymized precedent, CBA/union requirements, prior-discipline rules, or approval requirements. The AI must treat this as decision criteria—not case evidence.</p>
-                    <Textarea
-                      value={organizationContext}
-                      onChange={(event) => { setOrganizationContext(event.target.value); setResult(null); }}
-                      placeholder={'Example:\n- CBA requires progressive discipline except for listed serious misconduct.\n- Privacy policy says intentional snooping requires HR + Privacy Officer review.\n- Comparable anonymized precedent: …'}
-                      className="min-h-[120px] text-xs"
-                    />
-                    <p className="text-[10px] text-muted-foreground text-right">{organizationContext.length.toLocaleString()} / {MAX_ORG_CONTEXT.toLocaleString()}</p>
+                  <div className="px-5 pb-4">
+                    <OrganizationDisciplineMatrix config={organizationConfig} onChange={(next) => { setOrganizationConfig(next); setResult(null); }} maxCharacters={MAX_ORG_CONTEXT} />
+                    <p className="text-[10px] text-muted-foreground text-right mt-2">Serialized decision context: {organizationContext.length.toLocaleString()} / {MAX_ORG_CONTEXT.toLocaleString()}</p>
                   </div>
                 )}
               </div>
