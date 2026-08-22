@@ -12,12 +12,14 @@ import { AnalysisResult } from "./types";
 export async function exportToDocx(result: AnalysisResult) {
   const decisionLabel = result.decision === "needs_more_info" ? "NEEDS MORE INFO" : result.decision.toUpperCase();
   const decisionColor = result.decision === "substantiated" ? "DC2626" : result.decision === "unsubstantiated" ? "16A34A" : "D97706";
+  const closureLabel = result.closureAssessment.status.replace(/_/g, " ").toUpperCase();
   const children: Paragraph[] = [];
 
   children.push(new Paragraph({ children: [new TextRun({ text: "Compliance Investigation Report", bold: true, size: 36, color: "2563EB", font: "Arial" })], spacing: { after: 100 } }));
   children.push(new Paragraph({ children: [new TextRun({ text: `Case: ${result.caseId}`, size: 22, color: "646464", font: "Arial" })], spacing: { after: 50 } }));
   children.push(new Paragraph({ children: [new TextRun({ text: `Generated: ${result.analysisMetadata ? new Date(result.analysisMetadata.generatedAt).toLocaleString() : new Date().toLocaleString()}`, size: 22, color: "646464", font: "Arial" })], spacing: { after: 50 } }));
-  children.push(new Paragraph({ children: [new TextRun({ text: `AI decision support: ${decisionLabel}  |  Risk: ${result.riskLevel.toUpperCase()}  |  Confidence: ${result.confidenceScore}%`, size: 22, color: "646464", font: "Arial" })], spacing: { after: 200 } }));
+  children.push(new Paragraph({ children: [new TextRun({ text: `AI decision support: ${decisionLabel}  |  Risk: ${result.riskLevel.toUpperCase()}  |  Confidence: ${result.confidenceScore}%`, size: 22, color: "646464", font: "Arial" })], spacing: { after: 50 } }));
+  children.push(new Paragraph({ children: [new TextRun({ text: `Investigation closure status: ${closureLabel}`, size: 22, color: "646464", font: "Arial" })], spacing: { after: 200 } }));
   children.push(new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" } }, spacing: { after: 200 } }));
 
   if (result.analysisMetadata) {
@@ -45,6 +47,40 @@ export async function exportToDocx(result: AnalysisResult) {
     children.push(paragraph("No final human review record was saved before export. The AI analysis and corrective-action range below are decision support only and must not be treated as an authorized employment decision."));
     children.push(spacer());
   }
+
+  children.push(heading("INVESTIGATION SUFFICIENCY / CLOSURE GATE"));
+  children.push(new Paragraph({ children: [new TextRun({ text: closureLabel, bold: true, size: 28, color: "1E1E1E", font: "Arial" })], spacing: { after: 100 } }));
+  children.push(paragraph(result.closureAssessment.rationale));
+  if (result.closureAssessment.unresolvedMaterialIssues.length > 0) {
+    children.push(subheading("Unresolved material issues"));
+    result.closureAssessment.unresolvedMaterialIssues.forEach((item) => children.push(bullet(item)));
+  }
+
+  if (result.hypotheses.length > 0) {
+    children.push(subheading("Competing hypotheses"));
+    result.hypotheses.forEach((hypothesis) => {
+      children.push(paragraph(`${hypothesis.id} — ${hypothesis.label} [${hypothesis.state.replace(/_/g, " ")}]: ${hypothesis.description}`));
+      if (hypothesis.supportingEvidenceIds.length > 0) children.push(bullet(`Supporting evidence: ${hypothesis.supportingEvidenceIds.join(", ")}`));
+      if (hypothesis.contradictingEvidenceIds.length > 0) children.push(bullet(`Contradicting evidence: ${hypothesis.contradictingEvidenceIds.join(", ")}`));
+      hypothesis.unresolvedQuestions.forEach((question) => children.push(bullet(`Unresolved question: ${question}`)));
+    });
+  }
+
+  children.push(subheading("Evidence sufficiency checks"));
+  result.sufficiencyChecks.forEach((check) => {
+    const flags = [check.status.replace(/_/g, " "), check.material ? "material" : "not material"];
+    if (check.status === "unresolved") flags.push(check.resolvable ? "still investigable" : "not reasonably resolvable");
+    children.push(bullet(`${check.id.replace(/_/g, " ")} [${flags.join("; ")}]: ${check.rationale}${check.nextAction ? ` Next: ${check.nextAction}` : ""}`));
+  });
+
+  if (result.closureAssessment.whatWouldChangeConclusion.length > 0) {
+    children.push(subheading("What could change this conclusion?"));
+    children.push(paragraph("Challenge check: evidence that could materially weaken, reverse, or otherwise change the present finding."));
+    result.closureAssessment.whatWouldChangeConclusion.forEach((factor) => {
+      children.push(bullet(`${factor.description} Evidence needed: ${factor.evidenceNeeded} Potential impact: ${factor.impact}`));
+    });
+  }
+  children.push(spacer());
 
   children.push(heading("AI DECISION SUPPORT"));
   children.push(new Paragraph({ children: [new TextRun({ text: decisionLabel, bold: true, size: 32, color: decisionColor, font: "Arial" })], spacing: { after: 100 } }));
