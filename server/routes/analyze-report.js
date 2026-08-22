@@ -14,10 +14,10 @@ import { RESEARCH_CATEGORIES, topicForCategory } from "../lib/research-taxonomy.
 const MAX_REPORT_TEXT_LENGTH = 100_000;
 const MAX_ORG_CONTEXT_LENGTH = 20_000;
 // The step="report" request echoes the full classification (evidenceItems,
-// findings, disciplineFactors, etc.) back from the client. At the Zod schema's
-// own max lengths that JSON is roughly ~1.03MB worst case; budget generously
-// above that so a thorough, schema-valid case never gets rejected on size.
-const MAX_CLASSIFICATION_JSON_BYTES = 1_200_000;
+// findings, hypotheses, sufficiency checks, discipline factors, etc.) back from
+// the client. Budget above the schema-valid worst case so a thorough case does
+// not get rejected merely because its evidence map is detailed.
+const MAX_CLASSIFICATION_JSON_BYTES = 1_500_000;
 const MAX_BODY_BYTES = (MAX_REPORT_TEXT_LENGTH + MAX_ORG_CONTEXT_LENGTH) * 4
   + MAX_CLASSIFICATION_JSON_BYTES + 32_768;
 const isRateLimited = createRateLimiter();
@@ -38,6 +38,18 @@ const EVIDENCE_TYPES = ["document", "interview", "audit", "system_record", "poli
 const EVIDENCE_STANCES = ["supports", "contradicts", "context"];
 const EVIDENCE_STATUSES = ["corroborated", "supported", "single_source", "contradicted", "insufficient"];
 const DISCIPLINE_IMPACTS = ["mitigating", "neutral", "aggravating", "unknown"];
+const HYPOTHESIS_STATES = ["supported", "partially_supported", "weakened", "unresolved", "contradicted"];
+const SUFFICIENCY_CHECK_STATUSES = ["satisfied", "unresolved", "not_applicable"];
+const SUFFICIENCY_CHECK_IDS = [
+  "finding_support",
+  "contradictory_evidence",
+  "objective_records",
+  "key_witnesses",
+  "material_inconsistencies",
+  "policy_regulatory_context",
+  "standard_of_proof",
+  "reporting_escalation",
+];
 const DISCIPLINE_FACTORS = [
   "intent", "role_expectations", "sensitivity", "actual_harm", "potential_harm", "concealment",
   "cooperation", "prior_discipline", "prior_training", "policy_language", "precedent", "cba_union",
@@ -71,6 +83,43 @@ const findingSchema = {
   required: ["id", "statement", "inference", "evidenceStatus", "supportingEvidenceIds", "contradictingEvidenceIds"],
 };
 
+const hypothesisSchema = {
+  type: "object",
+  properties: {
+    id: { type: "string" },
+    label: { type: "string" },
+    description: { type: "string" },
+    state: { type: "string", enum: HYPOTHESIS_STATES },
+    supportingEvidenceIds: { type: "array", items: { type: "string" } },
+    contradictingEvidenceIds: { type: "array", items: { type: "string" } },
+    unresolvedQuestions: { type: "array", items: { type: "string" } },
+  },
+  required: ["id", "label", "description", "state", "supportingEvidenceIds", "contradictingEvidenceIds", "unresolvedQuestions"],
+};
+
+const sufficiencyCheckSchema = {
+  type: "object",
+  properties: {
+    id: { type: "string", enum: SUFFICIENCY_CHECK_IDS },
+    status: { type: "string", enum: SUFFICIENCY_CHECK_STATUSES },
+    material: { type: "boolean" },
+    resolvable: { type: "boolean" },
+    rationale: { type: "string" },
+    nextAction: { type: "string" },
+  },
+  required: ["id", "status", "material", "resolvable", "rationale", "nextAction"],
+};
+
+const conclusionChangeFactorSchema = {
+  type: "object",
+  properties: {
+    description: { type: "string" },
+    evidenceNeeded: { type: "string" },
+    impact: { type: "string" },
+  },
+  required: ["description", "evidenceNeeded", "impact"],
+};
+
 const disciplineFactorSchema = {
   type: "object",
   properties: {
@@ -97,6 +146,10 @@ const classificationSchema = {
     missingElements: { type: "array", items: { type: "string" } },
     evidenceItems: { type: "array", items: evidenceItemSchema },
     findings: { type: "array", items: findingSchema },
+    hypotheses: { type: "array", items: hypothesisSchema },
+    sufficiencyChecks: { type: "array", items: sufficiencyCheckSchema },
+    closureRationale: { type: "string" },
+    whatWouldChangeConclusion: { type: "array", items: conclusionChangeFactorSchema },
     disciplineFactors: { type: "array", items: disciplineFactorSchema },
     disciplineRange: {
       type: "object",
@@ -115,7 +168,8 @@ const classificationSchema = {
   required: [
     "decision", "riskLevel", "confidenceScore", "violationType", "violationCount", "recommendationTier",
     "aggravatingFactors", "mitigatingFactors", "notesCompleteness", "missingElements", "evidenceItems",
-    "findings", "disciplineFactors", "disciplineRange", "policyQuestions",
+    "findings", "hypotheses", "sufficiencyChecks", "closureRationale", "whatWouldChangeConclusion",
+    "disciplineFactors", "disciplineRange", "policyQuestions",
   ],
 };
 
@@ -157,6 +211,28 @@ const FindingZ = z.object({
   supportingEvidenceIds: z.array(z.string().max(80)).max(50),
   contradictingEvidenceIds: z.array(z.string().max(80)).max(50),
 });
+const HypothesisZ = z.object({
+  id: z.string().min(1).max(80),
+  label: z.string().min(1).max(200),
+  description: z.string().min(1).max(2000),
+  state: z.enum(HYPOTHESIS_STATES),
+  supportingEvidenceIds: z.array(z.string().max(80)).max(50),
+  contradictingEvidenceIds: z.array(z.string().max(80)).max(50),
+  unresolvedQuestions: z.array(z.string().max(1000)).max(20),
+});
+const SufficiencyCheckZ = z.object({
+  id: z.enum(SUFFICIENCY_CHECK_IDS),
+  status: z.enum(SUFFICIENCY_CHECK_STATUSES),
+  material: z.boolean(),
+  resolvable: z.boolean(),
+  rationale: z.string().min(1).max(2000),
+  nextAction: z.string().max(1500),
+});
+const ConclusionChangeFactorZ = z.object({
+  description: z.string().min(1).max(1500),
+  evidenceNeeded: z.string().min(1).max(1500),
+  impact: z.string().min(1).max(1500),
+});
 const DisciplineFactorZ = z.object({
   factor: z.enum(DISCIPLINE_FACTORS),
   assessment: z.string().min(1).max(1200),
@@ -176,6 +252,13 @@ const ClassificationZ = z.object({
   missingElements: z.array(z.string().max(1000)).max(30),
   evidenceItems: z.array(EvidenceZ).max(100),
   findings: z.array(FindingZ).max(50),
+  hypotheses: z.array(HypothesisZ).min(2).max(6),
+  sufficiencyChecks: z.array(SufficiencyCheckZ).min(8).max(8).refine(
+    (checks) => new Set(checks.map((check) => check.id)).size === SUFFICIENCY_CHECK_IDS.length,
+    "Every investigation sufficiency check must be returned exactly once",
+  ),
+  closureRationale: z.string().min(1).max(3000),
+  whatWouldChangeConclusion: z.array(ConclusionChangeFactorZ).max(12),
   disciplineFactors: z.array(DisciplineFactorZ).max(30),
   disciplineRange: z.object({
     minimum: z.string().min(1).max(300),
@@ -227,7 +310,7 @@ function signaturesMatch(a, b) {
   return left.length === right.length && cryptoTimingSafeEqual(left, right);
 }
 
-const CLASSIFICATION_PROMPT = `You are a healthcare compliance investigation decision-support analyst. You do NOT make employment decisions. Your job is to organize evidence, assess whether the evidence supports a finding, identify uncertainty, and propose a reviewable range of possible corrective actions.
+const CLASSIFICATION_PROMPT = `You are a healthcare compliance investigation decision-support analyst. You do NOT make employment decisions. Your job is to organize evidence, test competing explanations, assess whether the evidence supports a finding, identify uncertainty, determine whether the investigation is sufficient to close, and propose a reviewable range of possible corrective actions.
 
 ABSOLUTE EVIDENCE RULES:
 - The case notes arrive with immutable line labels like [L0001]. Every case-specific factual claim must trace to those lines.
@@ -236,6 +319,23 @@ ABSOLUTE EVIDENCE RULES:
 - If the evidence is sparse, conflicting, or lacks who/what/evidence needed to support the allegation, use NEEDS_MORE_INFO.
 - UNSUBSTANTIATED means the available evidence does not support the allegation or affirmatively supports a contrary conclusion. Do not treat lack of proof as proof the reporter lied.
 - Regulatory research and organization-specific rules are CONTEXT, never case facts.
+
+HYPOTHESIS-DRIVEN INVESTIGATION RULES:
+- Build 2-6 competing hypotheses before deciding. At minimum include the allegation/violation hypothesis and the strongest plausible innocent, authorized, mistaken, or alternative explanation that the notes support or leave open.
+- Do not invent an alternative explanation merely to create balance. A hypothesis may be contradicted or weakened when evidence points against it.
+- Do NOT assign percentages, probabilities, odds, or pseudo-scientific confidence to hypotheses. Use only: supported, partially_supported, weakened, unresolved, contradicted.
+- Every hypothesis must identify supporting and contradicting evidence IDs and the unresolved questions that still matter.
+- Explicitly challenge the leading hypothesis: identify what evidence would have to exist for the current conclusion to be wrong or materially different.
+
+INVESTIGATION SUFFICIENCY / CLOSURE GATE:
+- Return EXACTLY one check for each of these IDs: finding_support, contradictory_evidence, objective_records, key_witnesses, material_inconsistencies, policy_regulatory_context, standard_of_proof, reporting_escalation.
+- status=satisfied means the issue is adequately addressed for the present case; unresolved means an important question remains; not_applicable means the check truly does not apply.
+- material=true only when the unresolved issue could reasonably change the finding, the ability to defend it, required escalation/reporting, or whether the case can fairly close. Missing discipline-only context should not by itself block the investigative finding.
+- resolvable=true only when a realistic remaining investigative step can still answer the issue (obtain a record, interview an available witness, verify access/assignment, check policy, etc.).
+- For unresolved checks, nextAction must say the concrete action to take. If the information is unavailable or cannot realistically be recovered, resolvable must be false and nextAction should say to document the limitation.
+- Do not decide the closure status yourself. The server derives it deterministically: any material unresolved + resolvable issue = NOT READY TO CLOSE; material unresolved issues that are all unresolvable = READY WITH UNRESOLVED LIMITATIONS; no material unresolved issues = READY TO CLOSE.
+- closureRationale should explain the evidence sufficiency and remaining uncertainty without naming a closure-status label.
+- whatWouldChangeConclusion must list only evidence or facts that could materially change the current finding. State the evidence needed and how it would affect the conclusion. This is a challenge function, not generic brainstorming.
 
 DISCIPLINE / CORRECTIVE-ACTION RULES:
 - NEVER map incident count or risk level mechanically to discipline. One deliberate highly sensitive access can be more serious than multiple low-risk mistakes.
@@ -302,9 +402,19 @@ ${JSON.stringify({
   confidenceScore: classification.confidenceScore,
   violationType: classification.violationType,
   findings: classification.findings,
+  hypotheses: classification.hypotheses,
+  sufficiencyChecks: classification.sufficiencyChecks,
+  closureAssessment: classification.closureAssessment,
   disciplineRange: classification.disciplineRange,
   policyQuestions: classification.policyQuestions,
 }, null, 2)}
+
+INVESTIGATION SUFFICIENCY LANGUAGE:
+- The server-derived closureAssessment is authoritative for whether the investigation is presently sufficient to close.
+- If status is not_ready_to_close, write the report as an interim investigation report and do not imply the matter has reached a final investigative conclusion. Identify the material remaining work.
+- If status is ready_with_unresolved_limitations, expressly document the unresolved limitation and why further resolution is not reasonably available.
+- If status is ready_to_close, the conclusion may state that the evidence is sufficient to document a defensible finding, subject to final human review.
+- Preserve the strongest plausible alternative hypothesis and explain how the evidence supports, weakens, contradicts, or leaves it unresolved.
 
 DISCIPLINE LANGUAGE:
 - Present discipline as decision support and a range subject to organization policy, precedent, CBA/union obligations, HR, Legal, and supervisory review.
@@ -319,9 +429,9 @@ SECTIONS:
 I. INTRODUCTION — reporting/assignment facts only if notes provide them.
 II. INCIDENT OVERVIEW — concise neutral summary.
 III. INCIDENT DETAILS — only investigation steps and evidence actually documented.
-IV. INVESTIGATION FINDINGS — findings consistent with the signed evidence map; acknowledge material contradictory evidence.
-V. RECOMMENDATIONS — corrective-action range, process controls, and any HR/Legal/policy review still required.
-VI. CONCLUSION — summarize determination, evidence strength, risk, and remaining uncertainty.`;
+IV. INVESTIGATION FINDINGS — findings consistent with the signed evidence map; acknowledge material contradictory evidence and relevant competing hypotheses.
+V. RECOMMENDATIONS — remaining investigative work when applicable, corrective-action range, process controls, and any HR/Legal/policy review still required.
+VI. CONCLUSION — summarize determination, evidence strength, closure sufficiency, risk, and remaining uncertainty.`;
 }
 
 const router = express.Router();
@@ -362,7 +472,7 @@ router.post("/", async (req, res) => {
 
       const rawClassification = await callStructured(
         CLASSIFICATION_PROMPT,
-        `Analyze the line-numbered investigation notes below. Build an evidence map first, then findings, then the decision-support and corrective-action range.\n\n--- CASE NOTES ---\n${numberReportLines(reportText)}\n--- END CASE NOTES ---${contextBlock}${organizationBlock}`,
+        `Analyze the line-numbered investigation notes below. Build an evidence map, test competing hypotheses, assess the investigative finding, complete all eight sufficiency checks, identify what could change the conclusion, then evaluate corrective-action factors.\n\n--- CASE NOTES ---\n${numberReportLines(reportText)}\n--- END CASE NOTES ---${contextBlock}${organizationBlock}`,
         classificationSchema,
         "investigation_evidence_classification",
       );
