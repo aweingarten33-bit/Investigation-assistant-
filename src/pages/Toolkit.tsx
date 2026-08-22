@@ -2,11 +2,10 @@ import { useEffect, useState } from "react";
 import { useLocation, Link } from "react-router-dom";
 import {
   ArrowLeft, Menu, X, BookOpen, MessageSquare, Scale, Timer, Handshake,
-  Sparkles, FileText, Search, Gavel, type LucideIcon,
+  Sparkles, FileText, Gavel, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AILetterGenerator from "@/components/toolkit/AILetterGenerator";
-import AICaseAnalysis from "@/components/toolkit/AICaseAnalysis";
 import AIRecommendation from "@/components/toolkit/AIRecommendation";
 import InvestigationGuide from "@/components/toolkit/InvestigationGuide";
 import RegulatoryTimelines from "@/components/toolkit/RegulatoryTimelines";
@@ -14,7 +13,7 @@ import InterviewTemplates from "@/components/toolkit/InterviewTemplates";
 import DecisionFramework from "@/components/toolkit/DecisionFramework";
 import ConflictOfInterest from "@/components/toolkit/ConflictOfInterest";
 
-type SectionId = "guide" | "coi" | "ai-analysis" | "interviews" | "ai-recommendation" | "decisions" | "timelines" | "ai-letters";
+type SectionId = "guide" | "coi" | "interviews" | "ai-recommendation" | "decisions" | "timelines" | "ai-letters";
 
 interface ToolkitNavState {
   prefillLetterType?: string;
@@ -32,7 +31,6 @@ interface LetterPrefill {
 const SECTIONS: { id: SectionId; label: string; description: string; icon: LucideIcon; isAI?: boolean }[] = [
   { id: "guide", label: "Investigation Guide", description: "Start here — the full 7-phase walkthrough", icon: BookOpen },
   { id: "coi", label: "Conflict of Interest", description: "Phase 1 — check before you assign an investigator", icon: Handshake },
-  { id: "ai-analysis", label: "AI Case Analysis", description: "Phase 2–3 — quick regulatory read while you plan", icon: Search, isAI: true },
   { id: "interviews", label: "Interview Templates", description: "Phase 4 — copy-ready interview scripts", icon: MessageSquare },
   { id: "ai-recommendation", label: "AI Recommendation", description: "Phase 5 — let AI recommend the finding & discipline", icon: Gavel, isAI: true },
   { id: "decisions", label: "Decision Framework", description: "Phase 5 — or walk through it yourself, step by step", icon: Scale },
@@ -98,7 +96,6 @@ export default function Toolkit() {
         initialCaseDetails={letterPrefill?.caseDetails}
       />
     ),
-    "ai-analysis": <AICaseAnalysis />,
     "ai-recommendation": <AIRecommendation onDraftLetter={openLetterSection} />,
     guide: <InvestigationGuide />,
     timelines: <RegulatoryTimelines />,

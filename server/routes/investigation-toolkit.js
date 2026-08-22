@@ -66,28 +66,6 @@ ABSOLUTE RULE: Every statement must be traceable to the case details provided. N
 Format as a complete, ready-to-send business letter/memo: date line, recipient line, subject line, body, and a closing signature block for "The Compliance and Privacy Department." End with: "Any action taken rests within the discretion of Human Resources, Labor and Employee Relations and supervisory staff." unless this is a Reporter Update or Self-Disclosure, which have their own closings.`;
 }
 
-const CASE_ANALYSIS_PROMPT = `You are a senior hospital compliance and privacy investigator. Analyze the case facts and provide a concise, structured regulatory read.
-
-Be concise — bullet points, not paragraphs. No preamble, no restating the facts back. Keep the total response under 500 words. Only reference facts explicitly present in what's provided; flag gaps instead of guessing.
-
-## Root Cause
-- 1-2 sentences: primary root cause, system vs. individual failure
-
-## HIPAA / Regulatory Exposure
-- Applicable 45 CFR sections (one line each)
-- Penalty range if substantiated
-- Any mandatory reporting deadlines triggered (e.g., 60-day breach notification)
-
-## Risk Level: [Critical/High/Medium/Low]
-- One line each: regulatory, reputational, patient-trust
-
-## Suggested Next Steps
-- Numbered, max 6 steps — what to pull, who to interview, in what order
-
-## Likely Determination
-- Tentative finding + recommendation tier (re-education / written warning / consider termination / recommend termination), 1-2 sentences
-- Note explicitly that this is a preliminary read, not a substitute for the full investigation`;
-
 const router = express.Router();
 
 router.use(express.json({ limit: MAX_BODY_BYTES }));
@@ -121,20 +99,7 @@ router.post("/", async (req, res) => {
       return res.json({ text });
     }
 
-    if (mode === "case_analysis") {
-      const { caseFacts } = req.body;
-      if (typeof caseFacts !== "string" || caseFacts.trim().length < MIN_FIELD_LENGTH) {
-        return res.status(400).json({ error: "Please provide more case detail." });
-      }
-      if (caseFacts.length > MAX_FIELD_LENGTH) {
-        return res.status(413).json({ error: "Case facts are too long." });
-      }
-
-      const text = await callText(CASE_ANALYSIS_PROMPT, `## Case Facts\n${caseFacts.trim()}`);
-      return res.json({ text });
-    }
-
-    return res.status(400).json({ error: "Invalid request: mode must be 'generate_letter' or 'case_analysis'" });
+    return res.status(400).json({ error: "Invalid request: mode must be 'generate_letter'" });
   } catch (e) {
     console.error("investigation-toolkit error:", e);
     const status = e instanceof HttpError ? e.status : 500;

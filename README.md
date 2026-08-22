@@ -95,9 +95,6 @@ The `/toolkit` route (linked from the top-right of the home page, and from
   (HR referral memo, counseling memo through termination, plus closure,
   reporter-update, and self-disclosure templates) from a case summary.
   Pre-fills from a just-generated report or from AI Recommendation.
-- **AI Case Analysis** — a quick preliminary read (root cause, HIPAA exposure,
-  risk level, next steps) from raw case facts, useful before there's enough
-  for a full report.
 - **AI Recommendation** — once you're done investigating, paste in what you
   found and get the same classification/discipline-tier determination the
   full Report Generator produces, plus who to notify and in what order.
