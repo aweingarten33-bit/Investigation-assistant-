@@ -22,9 +22,6 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Production dependency audit
-        run: npm audit --omit=dev --audit-level=high
-
       - name: Server syntax
         run: npm run check:server
 
@@ -36,3 +33,6 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
