@@ -33,6 +33,35 @@ function isValidEvidenceRange(item, maxLine) {
     && end <= maxLine;
 }
 
+function normalizeLabel(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function verifiedSourceLabel(lines, item, start, end) {
+  const claimed = String(item.sourceLabel || "").trim().slice(0, 120);
+  const normalizedClaim = normalizeLabel(claimed);
+  if (!normalizedClaim || normalizedClaim === "investigation notes" || normalizedClaim === "notes") {
+    return "Investigation Notes";
+  }
+
+  // Source headings are normally immediately above a quoted passage. Search a
+  // small local window only; a matching heading 100 lines away should not make
+  // this excerpt look like it came from that source.
+  const windowStart = Math.max(0, start - 7);
+  const windowEnd = Math.min(lines.length, end + 2);
+  const nearby = lines.slice(windowStart, windowEnd);
+  const verified = nearby.some((line) => {
+    const normalizedLine = normalizeLabel(line);
+    if (!normalizedLine) return false;
+    return normalizedLine.includes(normalizedClaim) || normalizedClaim.includes(normalizedLine);
+  });
+
+  return verified ? claimed : "Investigation Notes";
+}
+
 export function hydrateEvidenceTraceability(classification, reportText) {
   const lines = splitReportLines(reportText);
   const maxLine = lines.length;
@@ -51,7 +80,7 @@ export function hydrateEvidenceTraceability(classification, reportText) {
     .map((item) => {
       const start = Number(item.lineStart);
       const end = Number(item.lineEnd);
-      const sourceLabel = (item.sourceLabel || "Investigation Notes").trim().slice(0, 120) || "Investigation Notes";
+      const sourceLabel = verifiedSourceLabel(lines, item, start, end);
       const excerpt = lines.slice(start - 1, end).join("\n").trim();
       return {
         ...item,
