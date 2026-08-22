@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import AILetterGenerator from "@/components/toolkit/AILetterGenerator";
 import AIRecommendation from "@/components/toolkit/AIRecommendation";
 import InvestigationGuide from "@/components/toolkit/InvestigationGuide";
+import HospitalInvestigationPlaybooks from "@/components/toolkit/HospitalInvestigationPlaybooks";
 import RegulatoryTimelines from "@/components/toolkit/RegulatoryTimelines";
 import InterviewTemplates from "@/components/toolkit/InterviewTemplates";
 import DecisionFramework from "@/components/toolkit/DecisionFramework";
@@ -52,7 +53,12 @@ export default function Toolkit() {
       />
     ),
     "ai-recommendation": <AIRecommendation onDraftLetter={openLetterSection} />,
-    guide: <InvestigationGuide />,
+    guide: (
+      <>
+        <InvestigationGuide />
+        <HospitalInvestigationPlaybooks />
+      </>
+    ),
     timelines: <RegulatoryTimelines />,
     interviews: <InterviewTemplates />,
     decisions: <DecisionFramework />,
@@ -64,7 +70,6 @@ export default function Toolkit() {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-[1000px] px-4 py-3 sm:py-10">
-        {/* ── Mobile (below sm): hamburger + always-visible content pane ───── */}
         <div className="sm:hidden">
           <div className="flex items-center gap-2 mb-3 sticky top-0 z-10 bg-background/95 backdrop-blur -mx-4 px-4 py-2">
             <ToolkitMenuButton activeId={activeSection} onSelect={setActiveSection} />
@@ -86,7 +91,6 @@ export default function Toolkit() {
           </div>
         </div>
 
-        {/* ── Desktop (sm and up): sidebar + content pane together ─────────── */}
         <div className="hidden sm:block">
           <div className="mb-4">
             <Link
