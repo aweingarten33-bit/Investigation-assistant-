@@ -4,7 +4,9 @@ import { callStructured, callText, HttpError } from "../lib/ai.js";
 import { createRateLimiter, clientIp } from "../lib/rate-limit.js";
 
 const MAX_FIELD_LENGTH = 20_000;
-const MAX_BODY_BYTES = MAX_FIELD_LENGTH * 6 + 8_192;
+const MAX_PLAN_CASE_LENGTH = 100_000;
+const MAX_PLAN_SUMMARY_LENGTH = 30_000;
+const MAX_BODY_BYTES = (MAX_PLAN_CASE_LENGTH + MAX_PLAN_SUMMARY_LENGTH) * 4 + 16_384;
 const MIN_FIELD_LENGTH = 20;
 const isRateLimited = createRateLimiter();
 
@@ -128,6 +130,7 @@ RULES:
 - For retaliation, consider protected activity, decision-maker knowledge, timing, comparator treatment, documented business reason, and consistency of application when relevant.
 - For fraud/billing, distinguish documentation error, unsupported billing, deliberate falsification, repayment/reporting analysis, and personal benefit rather than assuming intent.
 - For controlled substances, separate the fact of a discrepancy from proof identifying the responsible individual; include immediate patient-safety/security/preservation steps when warranted.
+- For LTC abuse/neglect matters, separate immediate resident protection/reporting duties from the final substantiation decision. Do not wait for a credibility determination before recommending preservation/protection steps when the allegation itself triggers them. Examine resident statements, injury/skin assessments, contemporaneous documentation, staffing/assignment records, call-system or access logs, coverage expectations, witnesses, and whether the evidence points to individual misconduct, a system failure, or both.
 - If evidence is sufficient to close, readyToClose may be true. Do not manufacture additional work merely to fill sections.
 - correctiveActionIdeas are system/process controls, education, monitoring, access changes, policy/process fixes, or referrals for review. Do not turn risk level into an automatic employee punishment.
 - retestPlan should follow TEST → FIND → FIX → RETEST logic where a process/control issue exists. If there is nothing meaningful to retest, return an empty array.
@@ -175,7 +178,7 @@ router.post("/", async (req, res) => {
       if (typeof analysisSummary !== "string" || analysisSummary.trim().length < MIN_FIELD_LENGTH) {
         return res.status(400).json({ error: "Please provide the current case analysis." });
       }
-      if (caseNotes.length > MAX_FIELD_LENGTH * 4 || analysisSummary.length > MAX_FIELD_LENGTH) {
+      if (caseNotes.length > MAX_PLAN_CASE_LENGTH || analysisSummary.length > MAX_PLAN_SUMMARY_LENGTH) {
         return res.status(413).json({ error: "Case material is too long for the investigator plan." });
       }
 
