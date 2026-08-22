@@ -74,6 +74,33 @@ export const INVESTIGATION_EVAL_CASES = [
     },
   },
   {
+    id: "ltc-abuse-supported",
+    title: "LTC resident abuse allegation with corroborating evidence",
+    notes: `Allegation: Resident R states Nursing Assistant N grabbed and struck the resident during morning care.\nResident interview: Resident R consistently states Nursing Assistant N became angry when the resident resisted dressing and struck the resident's upper arm.\nSkin assessment completed that morning documents a new bruise on the resident's upper arm.\nWitness interview: Nursing Assistant P states they entered the doorway after hearing yelling and saw Nursing Assistant N forcefully grab Resident R's upper arm, but did not see a strike.\nNursing Assistant N interview: Nursing Assistant N denies striking or forcefully grabbing the resident and states the bruise may have existed earlier.\nPrior skin assessment from the previous evening does not document a bruise in that location.\nThe notes do not contain a final medical opinion establishing exactly how the bruise occurred.`,
+    organizationContext: `Resident abuse allegations require immediate protection and applicable LTC reporting regardless of whether the final investigation is complete.\nFinding standard: preponderance of the evidence.\nSerious employee action requires HR/leadership review.`,
+    expectations: {
+      acceptedDecisions: ["substantiated"],
+      requireEvidence: true,
+      requireContradiction: true,
+      requiredFactorImpacts: { patient_safety: "aggravating" },
+      requireHrLegalReview: true,
+      forbiddenRecommendationPatterns: ["automatic termination", "must terminate"],
+    },
+  },
+  {
+    id: "ltc-neglect-call-bell",
+    title: "LTC neglect / delayed call-bell response with incomplete causation evidence",
+    notes: `Allegation: Resident S was left on the toilet for approximately 50 minutes after using the call bell and later attempted to transfer alone.\nResident interview: Resident S states the call bell was pressed several times and no staff came until after the resident attempted to stand.\nCall-system log: the bathroom call light activated at 14:08 and was cleared at 14:51.\nAssignment sheet: Nursing Assistant T was assigned to Resident S during the shift.\nNursing Assistant T interview: Nursing Assistant T states they were assisting another resident with a two-person transfer and believed another aide was covering the call light.\nUnit staffing sheet shows three aides were working the unit at the time.\nThe notes do not identify which staff member actually cleared the call light or whether another staff member had been specifically assigned to cover Nursing Assistant T's residents.\nNo injury was documented after the attempted transfer.`,
+    organizationContext: `Investigations should distinguish a system/process failure from individual neglect and should examine assignment, coverage, response logs, and resident risk.\nFinding standard: preponderance of the evidence.`,
+    expectations: {
+      acceptedDecisions: ["needs_more_info"],
+      requireEvidence: true,
+      requireContradiction: true,
+      requireMissingElements: true,
+      forbiddenFindingPatterns: ["nursing assistant t intentionally neglected"],
+    },
+  },
+  {
     id: "vague-insufficient-allegation",
     title: "Vague complaint with insufficient evidence",
     notes: `Anonymous complaint: "Someone in the billing office is doing shady stuff with patient accounts. This has been going on forever."\nThe complaint does not identify an employee, patient, account, date, transaction, claim, witness, or specific conduct.\nNo supporting attachment was submitted.`,
