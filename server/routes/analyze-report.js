@@ -1,7 +1,7 @@
 import express from "express";
 import { randomBytes, timingSafeEqual as cryptoTimingSafeEqual } from "node:crypto";
-import { z } from "zod";
-import { callStructured, callText, callTextWithSearch } from "../lib/ai.js";
+import { z, ZodError } from "zod";
+import { callStructured, callTextWithSearch } from "../lib/ai.js";
 import { createRateLimiter, clientIp } from "../lib/rate-limit.js";
 import {
   buildInputHash,
@@ -9,6 +9,7 @@ import {
   normalizeOrganizationContext,
   numberReportLines,
 } from "../lib/investigation-utils.js";
+import { RESEARCH_CATEGORIES, topicForCategory } from "../lib/research-taxonomy.js";
 
 const MAX_REPORT_TEXT_LENGTH = 100_000;
 const MAX_ORG_CONTEXT_LENGTH = 20_000;
@@ -127,6 +128,12 @@ const reportSchema = {
   required: ["introduction", "incidentOverview", "incidentDetails", "investigationFindings", "regulationsCited", "recommendations", "conclusion", "missingInfo"],
 };
 
+const researchTaxonomySchema = {
+  type: "object",
+  properties: { category: { type: "string", enum: RESEARCH_CATEGORIES } },
+  required: ["category"],
+};
+
 const EvidenceZ = z.object({
   id: z.string().min(1).max(80),
   sourceLabel: z.string().min(1).max(120),
@@ -184,6 +191,7 @@ const ReportZ = z.object({
   conclusion: z.string(),
   missingInfo: z.array(z.string()),
 });
+const ResearchTaxonomyZ = z.object({ category: z.enum(RESEARCH_CATEGORIES) });
 
 function canonicalize(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalize).join(",")}]`;
@@ -226,10 +234,10 @@ ABSOLUTE EVIDENCE RULES:
 DISCIPLINE / CORRECTIVE-ACTION RULES:
 - NEVER map incident count or risk level mechanically to discipline. One deliberate highly sensitive access can be more serious than multiple low-risk mistakes.
 - RiskLevel describes compliance/privacy/patient/regulatory risk. It is not a disciplinary level.
-- Evaluate each of these independently when evidence exists: intent; role/access expectations; data/record sensitivity; actual harm; potential harm; concealment; cooperation; prior discipline; prior training; policy language; organizational precedent; union/CBA constraints; leadership role; retaliation; personal benefit; fraud; patient safety; regulatory reporting implications.
+- Evaluate each independently when evidence exists: intent; role/access expectations; data/record sensitivity; actual harm; potential harm; concealment; cooperation; prior discipline; prior training; policy language; organizational precedent; union/CBA constraints; leadership role; retaliation; personal benefit; fraud; patient safety; regulatory reporting implications.
 - If policy language, precedent, prior history, HR rules, or CBA constraints are missing and could materially affect discipline, disciplineRange.policyDependent MUST be true and policyQuestions must say what needs review.
 - disciplineRange must give a reasonable minimum-to-maximum range, not pretend there is one universal answer. recommended may be "defer pending policy/HR review" when appropriate.
-- recommendationTier is only a coarse workflow label for legacy UI/letter routing. It must follow the full factor analysis, NEVER a hard risk/count table. Use policy_review when organization-specific information is necessary before choosing a tier.
+- recommendationTier is only a coarse workflow label for legacy letter routing. It must follow the full factor analysis, NEVER a hard risk/count table. Use policy_review when organization-specific information is necessary before choosing a tier.
 - Termination must never be framed as automatic. For serious actions, requiresHrLegalReview must be true.
 
 SEARCH CONTEXT:
@@ -238,31 +246,37 @@ SEARCH CONTEXT:
 ORGANIZATION CONTEXT:
 - An ORGANIZATION-SPECIFIC DISCIPLINE CONTEXT section may appear with policy excerpts, precedent, CBA rules, or an internal disciplinary matrix. Treat it as decision criteria, not case evidence. If absent, do not invent organization rules.`;
 
-const RESEARCH_TOPIC_PROMPT = `Convert the case description into a short, generic regulatory research topic. Return ONLY the generic topic, no names, dates, employer, locations, patient identifiers, employee identifiers, quotations, or case-specific details. Example: "unauthorized workforce access to patient records under HIPAA". If the type cannot be determined, return "insufficient information for generic research".`;
+const RESEARCH_TAXONOMY_PROMPT = `Classify the healthcare compliance issue into exactly one allowed regulatory research category. Return only the structured category. This is taxonomy selection, not case analysis. Do not include or repeat any name, employer, date, location, patient information, employee information, quotation, or other identifier in the output.`;
 
-const RESEARCH_PROMPT = `You are researching current general background for a healthcare compliance investigator. You will receive only a generic violation taxonomy, not case facts.
+const RESEARCH_PROMPT = `You are researching current general background for a healthcare compliance investigator. You will receive only a server-owned generic regulatory topic, never the case notes.
 
-Search for current, authoritative information relevant to the taxonomy, prioritizing primary sources such as HHS/OCR, CMS, OIG, DOJ, EEOC, state agencies, statutes, and regulations. Focus on:
+Search for current, authoritative information relevant to that topic, prioritizing primary sources such as HHS/OCR, CMS, OIG, DOJ, EEOC, state agencies, statutes, and regulations. Focus on:
 - current regulatory obligations and enforcement themes;
 - reporting/breach-analysis considerations;
-- any current guidance that could materially affect investigation handling.
+- current guidance that could materially affect investigation handling.
 
 Do NOT search for employer disciplinary norms as though they were law, and do NOT turn regulator penalties into an employee-discipline formula. Answer in 3-5 short bullets.`;
 
 async function researchContext(reportText) {
   try {
-    const topicRaw = await callText(
-      RESEARCH_TOPIC_PROMPT,
-      `Case description for taxonomy extraction only:\n\n---\n${reportText.slice(0, 8000)}\n---`,
+    const rawTaxonomy = await callStructured(
+      RESEARCH_TAXONOMY_PROMPT,
+      `Select a generic research category for these untrusted case notes. Do not echo any case detail.\n\n---\n${reportText.slice(0, 8000)}\n---`,
+      researchTaxonomySchema,
+      "regulatory_research_taxonomy",
     );
-    const topic = topicRaw.replace(/\s+/g, " ").trim().slice(0, 300);
-    if (!topic || topic.toLowerCase().includes("insufficient information")) return null;
+    const { category } = ResearchTaxonomyZ.parse(rawTaxonomy);
+    const topic = topicForCategory(category);
+    if (!topic) return null;
 
+    // Privacy boundary: the search-enabled provider call receives ONLY a
+    // server-owned topic string selected from a closed enum. No free-text
+    // model output and no raw case note can reach this call.
     const { text, sources } = await callTextWithSearch(
       RESEARCH_PROMPT,
-      `Generic violation taxonomy: ${topic}`,
+      `Generic regulatory topic: ${topic}`,
     );
-    return { topic, text, sources };
+    return { category, topic, text, sources };
   } catch (error) {
     console.error("Web-search grounding unavailable, continuing without it:", error.message);
     return null;
@@ -356,6 +370,7 @@ router.post("/", async (req, res) => {
         inputHash,
         sources: research?.sources || [],
         researchTopic: research?.topic || null,
+        researchCategory: research?.category || null,
       });
     }
 
@@ -388,7 +403,7 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "Invalid request: specify step='classify' or step='report' with signed classification data" });
   } catch (error) {
     console.error("analyze-report error:", error);
-    if (error instanceof z.ZodError) {
+    if (error instanceof ZodError) {
       return res.status(502).json({ error: "AI returned an invalid structured response. Please try again." });
     }
     res.status(error.status || 500).json({ error: error.message || "Analysis failed" });
