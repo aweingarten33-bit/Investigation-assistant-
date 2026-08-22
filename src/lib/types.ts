@@ -63,6 +63,16 @@ export interface HumanReviewRecord {
   reviewedAt: string;
 }
 
+export interface AnalysisMetadata {
+  analysisVersion: string;
+  generatedAt: string;
+  sourceFingerprint: string;
+  organizationContextApplied: boolean;
+  researchTopic: string | null;
+  evidenceCount: number;
+  findingCount: number;
+}
+
 export interface AnalysisResult {
   // Classification / decision support
   decision: Decision;
@@ -91,7 +101,9 @@ export interface AnalysisResult {
   conclusion: string;
   missingInfo: string[] | null;
 
-  // Human review (client-side until an enterprise case store is added)
+  // Provenance / human review. This demo keeps these in the current result
+  // and export only; a production case store should persist immutable events.
+  analysisMetadata?: AnalysisMetadata;
   humanReview?: HumanReviewRecord;
 
   // Client-side
