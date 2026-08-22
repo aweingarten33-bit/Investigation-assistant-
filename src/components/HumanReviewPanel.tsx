@@ -5,10 +5,10 @@ import { Textarea } from "@/components/ui/textarea";
 import type { AnalysisResult, HumanReviewRecord, HumanReviewStatus } from "@/lib/types";
 
 const STATUS_OPTIONS: { value: HumanReviewStatus; label: string; help: string }[] = [
-  { value: "approved", label: "Approve", help: "Human reviewer agrees with the finding/action after independent review." },
-  { value: "approved_with_changes", label: "Approve with changes", help: "Human reviewer accepts the analysis but changes the final finding/action or rationale." },
-  { value: "needs_more_info", label: "Need more information", help: "Human reviewer will not finalize until additional evidence/policy review is completed." },
-  { value: "rejected", label: "Reject AI recommendation", help: "Human reviewer disagrees with the AI analysis/recommendation and records why." },
+  { value: "approved", label: "I agree", help: "The finding/action makes sense after reviewing the evidence." },
+  { value: "approved_with_changes", label: "I agree, with changes", help: "The analysis is useful, but the final finding/action or rationale should be different." },
+  { value: "needs_more_info", label: "Not ready yet", help: "More evidence, policy review, or follow-up is needed before closing." },
+  { value: "rejected", label: "I disagree with the AI", help: "The AI analysis/recommendation is not the conclusion I would use." },
 ];
 
 export function HumanReviewPanel({
@@ -31,12 +31,12 @@ export function HumanReviewPanel({
 
   const save = () => {
     const review: HumanReviewRecord = {
-      reviewerName: reviewerName.trim() || "[Reviewer name not entered]",
-      reviewerRole: reviewerRole.trim() || "[Reviewer role not entered]",
+      reviewerName: reviewerName.trim() || "[Not entered]",
+      reviewerRole: reviewerRole.trim() || "[Not entered]",
       status,
       finalFinding: finalFinding.trim() || result.decision.replace(/_/g, " "),
-      finalAction: finalAction.trim() || "No final employment/corrective action recorded",
-      rationale: rationale.trim() || "No reviewer rationale entered",
+      finalAction: finalAction.trim() || "No final corrective action recorded",
+      rationale: rationale.trim() || "No rationale entered",
       reviewedAt: new Date().toISOString(),
     };
     onChange(review);
@@ -54,9 +54,9 @@ export function HumanReviewPanel({
         <div className="flex items-start gap-2.5">
           <ClipboardCheck className="h-4 w-4 text-primary mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-semibold text-foreground">Human Review Record</p>
+            <p className="text-sm font-semibold text-foreground">My Final Decision <span className="font-normal text-muted-foreground">(optional)</span></p>
             <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
-              The AI output is not the final decision. Record what a human reviewer actually decided after checking the evidence, policy, precedent, labor/CBA requirements, and HR/Legal input. This record is included in the current export but is not a persistent enterprise audit log.
+              Use this only when you want the Word export to show what you actually decided after reviewing the evidence. The AI result stays decision support; this is your conclusion.
             </p>
           </div>
         </div>
@@ -65,17 +65,17 @@ export function HumanReviewPanel({
       <div className="p-4 space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="space-y-1">
-            <span className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Reviewer name</span>
-            <input value={reviewerName} onChange={(e) => { setReviewerName(e.target.value); setSaved(false); }} className="w-full h-9 rounded-md border border-border bg-background px-3 text-xs" placeholder="Name" />
+            <span className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Name (optional)</span>
+            <input value={reviewerName} onChange={(e) => { setReviewerName(e.target.value); setSaved(false); }} className="w-full h-9 rounded-md border border-border bg-background px-3 text-xs" placeholder="Your name" />
           </label>
           <label className="space-y-1">
-            <span className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Reviewer role</span>
-            <input value={reviewerRole} onChange={(e) => { setReviewerRole(e.target.value); setSaved(false); }} className="w-full h-9 rounded-md border border-border bg-background px-3 text-xs" placeholder="Compliance, Privacy, HR, Legal, etc." />
+            <span className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Role (optional)</span>
+            <input value={reviewerRole} onChange={(e) => { setReviewerRole(e.target.value); setSaved(false); }} className="w-full h-9 rounded-md border border-border bg-background px-3 text-xs" placeholder="Compliance, Privacy, Investigator, etc." />
           </label>
         </div>
 
         <div>
-          <p className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground mb-2">Review disposition</p>
+          <p className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground mb-2">My disposition</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {STATUS_OPTIONS.map((option) => (
               <button key={option.value} type="button" onClick={() => { setStatus(option.value); setSaved(false); }} className={`rounded-lg border p-3 text-left transition-colors ${status === option.value ? "border-primary bg-primary/5" : "border-border hover:bg-muted/20"}`}>
@@ -92,24 +92,24 @@ export function HumanReviewPanel({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="space-y-1">
-            <span className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Final human finding</span>
-            <input value={finalFinding} onChange={(e) => { setFinalFinding(e.target.value); setSaved(false); }} className="w-full h-9 rounded-md border border-border bg-background px-3 text-xs" placeholder="Substantiated / not substantiated / modified finding" />
+            <span className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">My final finding</span>
+            <input value={finalFinding} onChange={(e) => { setFinalFinding(e.target.value); setSaved(false); }} className="w-full h-9 rounded-md border border-border bg-background px-3 text-xs" placeholder="Substantiated / unsubstantiated / needs more information" />
           </label>
           <label className="space-y-1">
-            <span className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Final action / disposition</span>
-            <input value={finalAction} onChange={(e) => { setFinalAction(e.target.value); setSaved(false); }} className="w-full h-9 rounded-md border border-border bg-background px-3 text-xs" placeholder="No action, coaching, warning, policy change, referred to HR, etc." />
+            <span className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">My final action / disposition</span>
+            <input value={finalAction} onChange={(e) => { setFinalAction(e.target.value); setSaved(false); }} className="w-full h-9 rounded-md border border-border bg-background px-3 text-xs" placeholder="Close, monitor, education, referral, corrective action, etc." />
           </label>
         </div>
 
         <label className="space-y-1 block">
-          <span className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Human rationale / override explanation</span>
-          <Textarea value={rationale} onChange={(e) => { setRationale(e.target.value); setSaved(false); }} className="min-h-[100px] text-xs" placeholder="Explain why the human reviewer accepted, changed, rejected, or deferred the AI recommendation. Note policy/precedent/CBA/HR/Legal factors that changed the outcome." />
+          <span className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Why I decided that</span>
+          <Textarea value={rationale} onChange={(e) => { setRationale(e.target.value); setSaved(false); }} className="min-h-[90px] text-xs" placeholder="What evidence, policy, contradiction, precedent, or other factor drove your final conclusion?" />
         </label>
 
         <div className="flex flex-wrap gap-2">
-          <Button type="button" onClick={save} className="h-9 text-xs"><Save className="h-3.5 w-3.5 mr-1.5" />Save Human Review</Button>
-          {result.humanReview && <Button type="button" variant="outline" onClick={clear} className="h-9 text-xs">Clear Review</Button>}
-          {saved && result.humanReview && <span className="inline-flex items-center gap-1 text-[11px] text-success"><CheckCircle2 className="h-3.5 w-3.5" />Included in this case result/export</span>}
+          <Button type="button" onClick={save} className="h-9 text-xs"><Save className="h-3.5 w-3.5 mr-1.5" />Save My Decision</Button>
+          {result.humanReview && <Button type="button" variant="outline" onClick={clear} className="h-9 text-xs">Clear</Button>}
+          {saved && result.humanReview && <span className="inline-flex items-center gap-1 text-[11px] text-success"><CheckCircle2 className="h-3.5 w-3.5" />Included in this result/export</span>}
         </div>
       </div>
     </div>
