@@ -107,8 +107,3 @@ export const DISCIPLINE_LEVELS: DisciplineLevel[] = [
     ],
   },
 ];
-
-export function disciplineLevelForTier(tier: RecommendationTier): DisciplineLevel {
-  if (tier === "policy_review") return DISCIPLINE_LEVELS[1];
-  return DISCIPLINE_LEVELS.find((d) => d.tier === tier) ?? DISCIPLINE_LEVELS[1];
-}

@@ -11,10 +11,10 @@ export function NotifyChecklist({ decision }: { decision: Decision }) {
   const items = decision === "substantiated"
     ? NOTIFICATION_CHECKLIST
     : NOTIFICATION_CHECKLIST.filter((item) => [
-        "The person investigated",
-        "The reporter / complainant",
-        "Compliance / Privacy Committee",
-      ].includes(item.who));
+        "person_investigated",
+        "reporter_complainant",
+        "compliance_privacy_committee",
+      ].includes(item.id));
 
   return (
     <div className="space-y-2">
@@ -26,8 +26,8 @@ export function NotifyChecklist({ decision }: { decision: Decision }) {
         This is a conditional routing checklist, not a universal notification order. Apply your organization's policy, privilege strategy, labor requirements, need-to-know rules, and any verified reporting duty.
       </p>
 
-      {items.map((item, i) => (
-        <div key={i} className="rounded-lg border border-border p-3.5">
+      {items.map((item) => (
+        <div key={item.id} className="rounded-lg border border-border p-3.5">
           <div className="flex items-start gap-2.5">
             <div className="w-5 h-5 rounded bg-muted text-muted-foreground flex items-center justify-center shrink-0 mt-0.5"><span className="text-[9px] font-bold">IF</span></div>
             <div className="flex-1 min-w-0">

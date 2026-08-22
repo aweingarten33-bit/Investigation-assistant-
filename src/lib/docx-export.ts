@@ -108,6 +108,20 @@ export async function exportToDocx(result: AnalysisResult) {
       }
       children.push(spacer());
     });
+
+    const evidenceIdsInFindings = new Set(
+      result.findings.flatMap((finding) => [...finding.supportingEvidenceIds, ...finding.contradictingEvidenceIds]),
+    );
+    const unlinkedEvidence = result.evidenceItems.filter((item) => !evidenceIdsInFindings.has(item.id));
+    if (unlinkedEvidence.length > 0) {
+      children.push(subheading("Other cited evidence (not tied to a specific finding)"));
+      children.push(paragraph("Context or policy excerpts weighed only in the corrective-action factors below."));
+      unlinkedEvidence.forEach((evidence) => {
+        children.push(bullet(`${evidence.id} — ${evidence.reference}: ${evidence.summary}`));
+        if (evidence.excerpt) children.push(quoteParagraph(evidence.excerpt));
+      });
+      children.push(spacer());
+    }
   }
 
   if (result.disciplineFactors.length > 0) {

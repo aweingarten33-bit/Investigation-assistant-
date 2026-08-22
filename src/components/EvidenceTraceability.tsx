@@ -111,6 +111,32 @@ export function EvidenceTraceability({
   const evidenceById = useMemo(() => new Map(evidenceItems.map((item) => [item.id, item])), [evidenceItems]);
   const [openFinding, setOpenFinding] = useState<string | null>(findings[0]?.id ?? null);
 
+  const evidenceIdsInFindings = useMemo(() => {
+    const ids = new Set<string>();
+    for (const finding of findings) {
+      for (const id of finding.supportingEvidenceIds) ids.add(id);
+      for (const id of finding.contradictingEvidenceIds) ids.add(id);
+    }
+    return ids;
+  }, [findings]);
+
+  const factorLabelsByEvidenceId = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const factor of disciplineFactors) {
+      for (const id of factor.evidenceIds) {
+        const labels = map.get(id) ?? [];
+        labels.push(FACTOR_LABELS[factor.factor]);
+        map.set(id, labels);
+      }
+    }
+    return map;
+  }, [disciplineFactors]);
+
+  // Evidence cited only by a discipline factor (or not cited anywhere a
+  // finding links to) — e.g. stance:"context" policy excerpts — never
+  // appears in the per-finding lists above, so surface it separately.
+  const unlinkedEvidence = evidenceItems.filter((item) => !evidenceIdsInFindings.has(item.id));
+
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
@@ -192,6 +218,32 @@ export function EvidenceTraceability({
           );
         })}
       </div>
+
+      {unlinkedEvidence.length > 0 && (
+        <div className="rounded-xl border border-border bg-card p-4">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+            <p className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">
+              Other cited evidence — {unlinkedEvidence.length}
+            </p>
+          </div>
+          <p className="text-[11px] text-muted-foreground mb-2 leading-relaxed">
+            Context or policy excerpts not tied to a specific finding above — e.g. evidence weighed only in the corrective-action factors below.
+          </p>
+          <div className="space-y-2">
+            {unlinkedEvidence.map((item) => (
+              <div key={item.id}>
+                <EvidenceCard evidence={item} />
+                {factorLabelsByEvidenceId.has(item.id) && (
+                  <p className="text-[10px] text-muted-foreground mt-1 ml-1">
+                    Weighed in: {factorLabelsByEvidenceId.get(item.id)!.join(", ")}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl border border-border bg-card p-4 space-y-4">
         <div className="flex items-center gap-2">

@@ -13,7 +13,13 @@ import { RESEARCH_CATEGORIES, topicForCategory } from "../lib/research-taxonomy.
 
 const MAX_REPORT_TEXT_LENGTH = 100_000;
 const MAX_ORG_CONTEXT_LENGTH = 20_000;
-const MAX_BODY_BYTES = (MAX_REPORT_TEXT_LENGTH + MAX_ORG_CONTEXT_LENGTH) * 4 + 32_768;
+// The step="report" request echoes the full classification (evidenceItems,
+// findings, disciplineFactors, etc.) back from the client. At the Zod schema's
+// own max lengths that JSON is roughly ~1.03MB worst case; budget generously
+// above that so a thorough, schema-valid case never gets rejected on size.
+const MAX_CLASSIFICATION_JSON_BYTES = 1_200_000;
+const MAX_BODY_BYTES = (MAX_REPORT_TEXT_LENGTH + MAX_ORG_CONTEXT_LENGTH) * 4
+  + MAX_CLASSIFICATION_JSON_BYTES + 32_768;
 const isRateLimited = createRateLimiter();
 
 const configuredSigningSecret = process.env.CLASSIFICATION_SIGNING_SECRET

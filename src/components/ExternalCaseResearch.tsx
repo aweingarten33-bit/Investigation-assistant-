@@ -60,8 +60,15 @@ export function ExternalCaseResearch({
   useEffect(() => {
     const notes = caseNotes?.trim();
     if (!autoSearch || !notes || notes.length < 20 || ranForNotesRef.current === notes) return;
-    ranForNotesRef.current = notes;
-    void runResearch();
+
+    // Debounce: caseNotes can change on every keystroke while the user is
+    // still editing (e.g. the case-facts textarea in AIRecommendation).
+    // Wait for a pause before firing the live web-search-backed request.
+    const timer = setTimeout(() => {
+      ranForNotesRef.current = notes;
+      void runResearch();
+    }, 1500);
+    return () => clearTimeout(timer);
     // runResearch intentionally depends on the current case inputs; this guard
     // prevents repeated provider/search calls during ordinary re-renders.
     // eslint-disable-next-line react-hooks/exhaustive-deps
