@@ -4,6 +4,7 @@ import { AnalysisResult, HumanReviewRecord } from "@/lib/types";
 import { ClassificationSummary } from "@/components/ClassificationSummary";
 import { EvidenceTraceability } from "@/components/EvidenceTraceability";
 import { HumanReviewPanel } from "@/components/HumanReviewPanel";
+import { CaseAuditTrail } from "@/components/CaseAuditTrail";
 import { NotifyChecklist } from "@/components/NotifyChecklist";
 import {
   FileText, ListChecks, Briefcase, AlertTriangle,
@@ -65,6 +66,8 @@ export function AnalysisResults({
       {onHumanReviewChange && (
         <HumanReviewPanel result={result} onChange={onHumanReviewChange} />
       )}
+
+      <CaseAuditTrail result={result} />
 
       {result.missingInfo && result.missingInfo.length > 0 && (
         <div className="rounded-lg border border-warning/30 bg-warning/5 p-5">
