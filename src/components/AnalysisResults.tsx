@@ -1,5 +1,5 @@
 import type React from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AnalysisResult, HumanReviewRecord } from "@/lib/types";
 import { ClassificationSummary } from "@/components/ClassificationSummary";
 import { EvidenceTraceability } from "@/components/EvidenceTraceability";
@@ -7,6 +7,7 @@ import { HumanReviewPanel } from "@/components/HumanReviewPanel";
 import { CaseAuditTrail } from "@/components/CaseAuditTrail";
 import { NotifyChecklist } from "@/components/NotifyChecklist";
 import { InvestigatorNextSteps } from "@/components/InvestigatorNextSteps";
+import { ExternalCaseResearch } from "@/components/ExternalCaseResearch";
 import {
   FileText, ListChecks, Briefcase, AlertTriangle,
   Scale, BookOpen, Info, ChevronDown, FileSearch,
@@ -50,9 +51,31 @@ export function AnalysisResults({
   caseNotes: string;
   onHumanReviewChange?: (review: HumanReviewRecord | undefined) => void;
 }) {
+  const researchSummary = useMemo(() => JSON.stringify({
+    decision: result.decision,
+    riskLevel: result.riskLevel,
+    violationType: result.violationType,
+    findings: result.findings.map((finding) => ({
+      statement: finding.statement,
+      evidenceStatus: finding.evidenceStatus,
+      inference: finding.inference,
+    })),
+    disciplineFactors: result.disciplineFactors.map((factor) => ({
+      factor: factor.factor,
+      impact: factor.impact,
+      assessment: factor.assessment,
+    })),
+  }), [result]);
+
   return (
     <div className="space-y-3 fade-in">
       <ClassificationSummary classification={result} sources={result.sources} />
+
+      <ExternalCaseResearch
+        caseNotes={caseNotes}
+        analysisSummary={researchSummary}
+        initialSources={result.sources || []}
+      />
 
       <InvestigatorNextSteps result={result} caseNotes={caseNotes} />
 
