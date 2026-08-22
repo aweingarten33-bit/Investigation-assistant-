@@ -70,16 +70,40 @@ describe("investigation evidence utilities", () => {
     expect(result.findings[0].evidenceStatus).toBe("single_source");
   });
 
-  it("clamps evidence line ranges to the submitted notes instead of trusting model offsets", () => {
+  it("rejects out-of-range evidence citations instead of silently clamping them onto real text", () => {
     const result = hydrateEvidenceTraceability(baseClassification({
       evidenceItems: [
         { id: "E1", sourceLabel: "Notes", lineStart: 999, lineEnd: 1200, evidenceType: "document", stance: "context", summary: "Out-of-range model reference" },
       ],
+      findings: [
+        { id: "F1", statement: "Finding", inference: "Inference", evidenceStatus: "supported", supportingEvidenceIds: ["E1"], contradictingEvidenceIds: [] },
+      ],
     }), "Line one\nLine two");
 
-    expect(result.evidenceItems[0].lineStart).toBe(2);
-    expect(result.evidenceItems[0].lineEnd).toBe(2);
-    expect(result.evidenceItems[0].excerpt).toBe("Line two");
+    expect(result.evidenceItems).toEqual([]);
+    expect(result.findings[0].supportingEvidenceIds).toEqual([]);
+    expect(result.findings[0].evidenceStatus).toBe("insufficient");
+  });
+
+  it("rejects reversed line ranges", () => {
+    const result = hydrateEvidenceTraceability(baseClassification({
+      evidenceItems: [
+        { id: "E1", sourceLabel: "Notes", lineStart: 2, lineEnd: 1, evidenceType: "document", stance: "supports", summary: "Invalid range" },
+      ],
+    }), "Line one\nLine two");
+    expect(result.evidenceItems).toEqual([]);
+  });
+
+  it("marks contradiction-only findings contradicted", () => {
+    const result = hydrateEvidenceTraceability(baseClassification({
+      evidenceItems: [
+        { id: "E1", sourceLabel: "Interview", lineStart: 1, lineEnd: 1, evidenceType: "interview", stance: "contradicts", summary: "Contrary evidence" },
+      ],
+      findings: [
+        { id: "F1", statement: "Finding", inference: "Inference", evidenceStatus: "supported", supportingEvidenceIds: [], contradictingEvidenceIds: ["E1"] },
+      ],
+    }), "Contrary evidence");
+    expect(result.findings[0].evidenceStatus).toBe("contradicted");
   });
 
   it("marks a finding corroborated only when two valid supporting items remain and no contradiction remains", () => {
