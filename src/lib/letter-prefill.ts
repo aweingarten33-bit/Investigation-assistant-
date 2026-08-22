@@ -20,6 +20,8 @@ export function buildLetterPrefillDetails(result: AnalysisResult): string {
   const lines: string[] = [
     `Case: ${result.caseId}`,
     `AI Decision Support Finding: ${result.decision.replace(/_/g, " ")}`,
+    `Investigation Closure Status: ${result.closureAssessment.status.replace(/_/g, " ")}`,
+    `Closure Rationale: ${result.closureAssessment.rationale}`,
     `Risk Level: ${result.riskLevel}`,
     `Violation Type: ${result.violationType}`,
     `Violation Count: ${result.violationCount}`,
@@ -27,6 +29,29 @@ export function buildLetterPrefillDetails(result: AnalysisResult): string {
     `AI Recommended for Review: ${result.disciplineRange.recommended}`,
     `Policy Dependent: ${result.disciplineRange.policyDependent ? "yes" : "no"}`,
   ];
+
+  if (result.closureAssessment.status === "not_ready_to_close") {
+    lines.push(
+      "",
+      "INVESTIGATION CLOSURE GATE: NOT READY TO CLOSE. Do not present this handoff as a final investigative closure or final employment disposition.",
+    );
+  } else if (result.closureAssessment.status === "ready_with_unresolved_limitations") {
+    lines.push(
+      "",
+      "INVESTIGATION CLOSURE GATE: READY WITH UNRESOLVED LIMITATIONS. Any closure communication must expressly preserve the documented evidentiary limitation.",
+    );
+  }
+
+  if (result.closureAssessment.unresolvedMaterialIssues.length > 0) {
+    lines.push("", "Unresolved material issues:", ...result.closureAssessment.unresolvedMaterialIssues.map((item) => `- ${item}`));
+  }
+
+  if (result.hypotheses.length > 0) {
+    lines.push("", "Competing hypotheses:");
+    result.hypotheses.forEach((hypothesis) => {
+      lines.push(`- ${hypothesis.id} ${hypothesis.label} [${hypothesis.state.replace(/_/g, " ")}]: ${hypothesis.description}`);
+    });
+  }
 
   if (result.humanReview) {
     lines.push(

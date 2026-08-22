@@ -62,6 +62,51 @@ function verifiedSourceLabel(lines, item, start, end) {
   return verified ? claimed : "Investigation Notes";
 }
 
+export function deriveClosureAssessment(classification) {
+  const checks = Array.isArray(classification.sufficiencyChecks) ? classification.sufficiencyChecks : [];
+  const unresolvedMaterial = checks.filter((check) => check.material && check.status === "unresolved");
+  const actionable = unresolvedMaterial.filter((check) => check.resolvable);
+
+  let status;
+  if (actionable.length > 0) {
+    status = "not_ready_to_close";
+  } else if (unresolvedMaterial.length > 0) {
+    status = "ready_with_unresolved_limitations";
+  } else {
+    status = "ready_to_close";
+  }
+
+  // A NEEDS_MORE_INFO classification cannot be silently labelled ready when
+  // the model failed to identify the corresponding sufficiency problem. If
+  // the outstanding issue is explicitly unresolvable, the limitations state
+  // above is still allowed so an inconclusive case can eventually be closed.
+  if (classification.decision === "needs_more_info" && status === "ready_to_close") {
+    status = "not_ready_to_close";
+  }
+
+  const unresolvedMaterialIssues = unresolvedMaterial.map((check) => {
+    const action = check.nextAction ? ` Next action: ${check.nextAction}` : "";
+    return `${check.rationale}${action}`.trim();
+  });
+
+  const baseRationale = String(classification.closureRationale || "").trim();
+  let fallbackRationale = "The available evidence is sufficient to document a defensible conclusion, subject to human review.";
+  if (status === "not_ready_to_close") {
+    fallbackRationale = "At least one material, still-investigable issue remains unresolved and could change the finding.";
+  } else if (status === "ready_with_unresolved_limitations") {
+    fallbackRationale = "Material uncertainty remains, but the outstanding issue is not reasonably resolvable with available investigative steps; close only with the limitation documented.";
+  }
+
+  return {
+    status,
+    rationale: baseRationale || fallbackRationale,
+    unresolvedMaterialIssues,
+    whatWouldChangeConclusion: Array.isArray(classification.whatWouldChangeConclusion)
+      ? classification.whatWouldChangeConclusion
+      : [],
+  };
+}
+
 export function hydrateEvidenceTraceability(classification, reportText) {
   const lines = splitReportLines(reportText);
   const maxLine = lines.length;
@@ -113,10 +158,28 @@ export function hydrateEvidenceTraceability(classification, reportText) {
     };
   });
 
+  const hypotheses = (classification.hypotheses || []).map((hypothesis, index) => {
+    const supportingEvidenceIds = (hypothesis.supportingEvidenceIds || []).filter((id) => validEvidenceIds.has(id));
+    const contradictingEvidenceIds = (hypothesis.contradictingEvidenceIds || []).filter((id) => validEvidenceIds.has(id));
+
+    let state = hypothesis.state;
+    if (supportingEvidenceIds.length === 0 && contradictingEvidenceIds.length > 0) state = "contradicted";
+    else if (supportingEvidenceIds.length === 0 && contradictingEvidenceIds.length === 0 && state === "supported") state = "unresolved";
+
+    return {
+      ...hypothesis,
+      id: hypothesis.id || `H${index + 1}`,
+      supportingEvidenceIds,
+      contradictingEvidenceIds,
+      state,
+    };
+  });
+
   const disciplineFactors = (classification.disciplineFactors || []).map((factor) => ({
     ...factor,
     evidenceIds: (factor.evidenceIds || []).filter((id) => validEvidenceIds.has(id)),
   }));
 
-  return { ...classification, evidenceItems, findings, disciplineFactors };
+  const hydrated = { ...classification, evidenceItems, findings, hypotheses, disciplineFactors };
+  return { ...hydrated, closureAssessment: deriveClosureAssessment(hydrated) };
 }

@@ -7,6 +7,7 @@ import { HumanReviewPanel } from "@/components/HumanReviewPanel";
 import { CaseAuditTrail } from "@/components/CaseAuditTrail";
 import { NotifyChecklist } from "@/components/NotifyChecklist";
 import { InvestigatorNextSteps } from "@/components/InvestigatorNextSteps";
+import { InvestigationSufficiency } from "@/components/InvestigationSufficiency";
 import { ExternalCaseResearch } from "@/components/ExternalCaseResearch";
 import {
   FileText, ListChecks, Briefcase, AlertTriangle,
@@ -55,6 +56,12 @@ export function AnalysisResults({
     decision: result.decision,
     riskLevel: result.riskLevel,
     violationType: result.violationType,
+    closureStatus: result.closureAssessment.status,
+    hypotheses: result.hypotheses.map((hypothesis) => ({
+      label: hypothesis.label,
+      state: hypothesis.state,
+      unresolvedQuestions: hypothesis.unresolvedQuestions,
+    })),
     findings: result.findings.map((finding) => ({
       statement: finding.statement,
       evidenceStatus: finding.evidenceStatus,
@@ -70,6 +77,8 @@ export function AnalysisResults({
   return (
     <div className="space-y-3 fade-in">
       <ClassificationSummary classification={result} sources={result.sources} />
+
+      <InvestigationSufficiency result={result} />
 
       <ExternalCaseResearch
         caseNotes={caseNotes}
@@ -127,7 +136,7 @@ export function AnalysisResults({
       </Section>
 
       <Section icon={Scale} title="IV. Investigation Findings">
-        <p className="text-[11px] text-muted-foreground mb-3">Formal report language. Use the Evidence Map above to inspect the exact support and contradictions behind each finding.</p>
+        <p className="text-[11px] text-muted-foreground mb-3">Formal report language. Use the Evidence Map and Investigation Sufficiency Engine above to inspect the exact support, competing explanations, contradictions, and closure readiness behind each finding.</p>
         <ul className="space-y-2">
           {result.investigationFindings.map((finding, i) => (
             <li key={i} className="flex gap-2 text-sm text-foreground">
