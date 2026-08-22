@@ -12,11 +12,12 @@ The product is no longer centered on "paste notes → AI writes a report." The w
 2. The server converts the notes into immutable numbered lines (`[L0001]`, `[L0002]`, ...).
 3. The AI builds an **evidence map** using only those source-line references.
 4. The server reconstructs every displayed evidence excerpt from the original submitted lines — the model does not get to invent its own quote/citation.
-5. Findings link to supporting and contradicting evidence IDs.
-6. The engine separately evaluates compliance/regulatory risk and the factors relevant to corrective action.
-7. Corrective action is presented as a **minimum → recommended-for-review → maximum range**, with organization-specific open questions where policy/precedent/CBA facts are missing.
-8. A human reviewer can explicitly **approve, approve with changes, reject, or defer** the AI decision support and record the actual final finding/action and rationale.
-9. The report and Word export include an **Evidence Traceability Appendix** and the saved human-review disposition when one has been recorded.
+5. Invalid line ranges and invented evidence IDs are discarded rather than silently repaired onto real source text.
+6. Findings link to supporting and contradicting evidence IDs.
+7. The engine separately evaluates compliance/regulatory risk and the factors relevant to corrective action.
+8. Corrective action is presented as a **minimum → recommended-for-review → maximum range**, with organization-specific open questions where policy/precedent/CBA facts are missing.
+9. A human reviewer can explicitly **approve, approve with changes, reject, or defer** the AI decision support and record the actual final finding/action and rationale.
+10. The report and Word export include an **Evidence Traceability Appendix**, analysis provenance, and the saved human-review disposition when one has been recorded.
 
 ## Evidence traceability
 
@@ -27,12 +28,13 @@ Each traceable finding includes:
 - evidence status (`corroborated`, `single source`, `contradicted`, etc.);
 - supporting evidence IDs;
 - contradicting evidence IDs;
-- source label and exact line range;
+- a source label only when that label can be verified near the cited source lines;
+- exact line range;
 - the exact excerpt reconstructed by the server from the submitted notes.
 
-Invalid evidence IDs are removed and out-of-range model line references are clamped server-side before results are returned. Evidence status is recalculated after that validation, so a model cannot obtain a "corroborated" label merely by inventing source IDs.
+The model never supplies the displayed quote. The server reconstructs it from the submitted line range. Out-of-range or reversed line references are rejected, invented evidence IDs are stripped, and evidence status is recalculated after validation. This prevents a model from obtaining a "corroborated" label merely by inventing citations.
 
-## Human review record
+## Human review and case provenance
 
 The main report result includes a **Human Review Record**. A reviewer can record:
 
@@ -45,7 +47,9 @@ The main report result includes a **Human Review Record**. A reviewer can record
 
 When saved, that human decision is carried into the Word export and downstream letter handoff ahead of the AI recommendation. If no human review has been saved, exports and letter handoffs explicitly state that the AI action range is **not an authorized final employment decision**.
 
-This is still a client-side case result, not an immutable enterprise audit trail. A production case-management version would persist signed reviewer actions, case versions, assignments, and audit events server-side.
+The result also displays **Case Provenance & Review Trail** metadata for the current analysis: analysis version, generation time, source fingerprint, evidence/finding counts, whether organization-specific discipline context was applied, the generic regulatory research topic used, and the current human-review event.
+
+This is still a client-side current-case result, **not an immutable enterprise audit trail**. A production case-management version would persist authenticated reviewer actions, case versions, assignments, approvals, and audit events server-side.
 
 ## Corrective-action / discipline design
 
@@ -72,7 +76,21 @@ The AI is instructed to evaluate, when evidence exists:
 - patient safety;
 - regulatory reporting implications.
 
-Users can optionally paste **organization-specific discipline context** such as policy language, a disciplinary matrix, anonymized precedent, HR rules, CBA requirements, or approval thresholds. That information is treated as decision criteria, **not case evidence**. If material organization-specific information is missing, the model is expected to mark the recommendation policy-dependent and identify the questions that must be resolved.
+### Organization-configurable discipline matrix
+
+Both the full report workflow and standalone AI decision-support tool use the same structured organization configuration. The user can provide:
+
+- standard of proof / finding rule;
+- applicable policy or code-of-conduct language;
+- the organization's own disciplinary/corrective-action matrix;
+- anonymized comparable precedent;
+- CBA / union / due-process requirements;
+- prior-discipline / progressive-discipline rules;
+- training, role, and access expectations;
+- required HR / Legal / leadership approvals;
+- other organization-specific criteria.
+
+That information is serialized into clearly labeled organization context and treated as **decision criteria, not case evidence**. If material organization-specific information is missing, the model is expected to mark the recommendation policy-dependent, use `policy_review` when appropriate, and identify the questions that must be resolved rather than guessing.
 
 The manual Decision Framework follows the same philosophy and no longer automatically derives a discipline level from intent, incident count, risk level, or a factor score.
 
@@ -173,7 +191,7 @@ The `/toolkit` route includes:
 - **Regulatory Deadlines** with scoped primary-source references
 - **AI Letter Generator**
 
-The full report workflow additionally includes the **Human Review Record** described above.
+The full report workflow additionally includes the **Human Review Record** and **Case Provenance & Review Trail** described above.
 
 ## Tests / CI
 
@@ -185,12 +203,15 @@ Regression tests now cover:
 - exact excerpt reconstruction;
 - cryptographic input hashing;
 - rejection of invented evidence IDs;
+- rejection of invalid/out-of-range and reversed source-line citations;
 - contradiction handling;
-- clamping invalid model line offsets;
 - corroboration status rules;
 - discipline-factor evidence references;
 - closed regulatory taxonomy mapping;
-- rejection of arbitrary/free-text values as search topics.
+- rejection of arbitrary/free-text values as search topics;
+- organization discipline-matrix serialization;
+- organization matrix UI behavior;
+- case provenance UI behavior.
 
 CI is configured to run:
 
@@ -206,4 +227,4 @@ on pull requests and pushes to `main`. `check:server` uses `node --check` agains
 
 ## Production-readiness warning
 
-This repository is a strong demo / decision-support prototype, not a turn-key HIPAA enterprise case-management system. Real PHI/PII production use still requires, at minimum, appropriate contractual arrangements with providers/hosting vendors, authentication and authorization, persistent audit logging, retention/deletion controls, incident response, access reviews, environment hardening, organization-specific legal/privacy/security assessment, and a validated model-evaluation program.
+This repository is a strong demo / decision-support prototype, not a turn-key HIPAA enterprise case-management system. Real PHI/PII production use still requires, at minimum, appropriate contractual arrangements with providers/hosting vendors, authentication and authorization, encrypted persistent case storage, immutable server-side audit logging/version history, retention/deletion controls, incident response, access reviews, environment hardening, organization-specific legal/privacy/security assessment, and a validated model-evaluation program.
