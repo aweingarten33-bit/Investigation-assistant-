@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildInputHash,
+  deriveClosureAssessment,
   hydrateEvidenceTraceability,
   numberReportLines,
   splitReportLines,
@@ -9,8 +10,13 @@ import {
 
 function baseClassification(overrides = {}) {
   return {
+    decision: "substantiated",
     evidenceItems: [],
     findings: [],
+    hypotheses: [],
+    sufficiencyChecks: [],
+    closureRationale: "Evidence was assessed against the material unresolved issues.",
+    whatWouldChangeConclusion: [],
     disciplineFactors: [],
     ...overrides,
   };
@@ -133,5 +139,76 @@ describe("investigation evidence utilities", () => {
 
     expect(result.disciplineFactors[0].evidenceIds).toEqual(["E1"]);
     expect(result.disciplineFactors[1].impact).toBe("unknown");
+  });
+
+  it("strips invented evidence IDs from hypotheses and does not preserve an unsupported supported state", () => {
+    const result = hydrateEvidenceTraceability(baseClassification({
+      evidenceItems: [
+        { id: "E1", sourceLabel: "Notes", lineStart: 1, lineEnd: 1, evidenceType: "document", stance: "supports", summary: "Known fact" },
+      ],
+      hypotheses: [
+        { id: "H1", label: "Unauthorized access", description: "Access lacked a work purpose.", state: "supported", supportingEvidenceIds: ["FAKE"], contradictingEvidenceIds: [], unresolvedQuestions: [] },
+      ],
+    }), "Known fact");
+
+    expect(result.hypotheses[0].supportingEvidenceIds).toEqual([]);
+    expect(result.hypotheses[0].state).toBe("unresolved");
+  });
+});
+
+describe("deterministic closure gate", () => {
+  it("blocks closure when a material unresolved issue is still investigable", () => {
+    const result = deriveClosureAssessment(baseClassification({
+      sufficiencyChecks: [{
+        id: "key_witnesses",
+        status: "unresolved",
+        material: true,
+        resolvable: true,
+        rationale: "A witness can verify the claimed operational purpose.",
+        nextAction: "Interview the witness.",
+      }],
+    }));
+
+    expect(result.status).toBe("not_ready_to_close");
+    expect(result.unresolvedMaterialIssues[0]).toContain("Interview the witness");
+  });
+
+  it("allows closure with limitations when material uncertainty cannot reasonably be resolved", () => {
+    const result = deriveClosureAssessment(baseClassification({
+      sufficiencyChecks: [{
+        id: "objective_records",
+        status: "unresolved",
+        material: true,
+        resolvable: false,
+        rationale: "Relevant surveillance was overwritten before the investigation began.",
+        nextAction: "Document the unavailable evidence as a limitation.",
+      }],
+    }));
+
+    expect(result.status).toBe("ready_with_unresolved_limitations");
+  });
+
+  it("marks a case ready when no material unresolved issue remains", () => {
+    const result = deriveClosureAssessment(baseClassification({
+      sufficiencyChecks: [{
+        id: "finding_support",
+        status: "satisfied",
+        material: true,
+        resolvable: false,
+        rationale: "Material findings are supported by validated evidence.",
+        nextAction: "",
+      }],
+    }));
+
+    expect(result.status).toBe("ready_to_close");
+  });
+
+  it("does not let NEEDS_MORE_INFO silently become ready to close", () => {
+    const result = deriveClosureAssessment(baseClassification({
+      decision: "needs_more_info",
+      sufficiencyChecks: [],
+    }));
+
+    expect(result.status).toBe("not_ready_to_close");
   });
 });

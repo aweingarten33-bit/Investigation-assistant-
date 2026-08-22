@@ -6,6 +6,9 @@ export type EvidenceStance = "supports" | "contradicts" | "context";
 export type EvidenceStatus = "corroborated" | "supported" | "single_source" | "contradicted" | "insufficient";
 export type DisciplineImpact = "mitigating" | "neutral" | "aggravating" | "unknown";
 export type HumanReviewStatus = "approved" | "approved_with_changes" | "needs_more_info" | "rejected";
+export type HypothesisState = "supported" | "partially_supported" | "weakened" | "unresolved" | "contradicted";
+export type SufficiencyCheckStatus = "satisfied" | "unresolved" | "not_applicable";
+export type ClosureStatus = "ready_to_close" | "not_ready_to_close" | "ready_with_unresolved_limitations";
 
 export interface Source {
   url: string;
@@ -31,6 +34,46 @@ export interface TraceableFinding {
   evidenceStatus: EvidenceStatus;
   supportingEvidenceIds: string[];
   contradictingEvidenceIds: string[];
+}
+
+export interface InvestigationHypothesis {
+  id: string;
+  label: string;
+  description: string;
+  state: HypothesisState;
+  supportingEvidenceIds: string[];
+  contradictingEvidenceIds: string[];
+  unresolvedQuestions: string[];
+}
+
+export interface SufficiencyCheck {
+  id:
+    | "finding_support"
+    | "contradictory_evidence"
+    | "objective_records"
+    | "key_witnesses"
+    | "material_inconsistencies"
+    | "policy_regulatory_context"
+    | "standard_of_proof"
+    | "reporting_escalation";
+  status: SufficiencyCheckStatus;
+  material: boolean;
+  resolvable: boolean;
+  rationale: string;
+  nextAction: string;
+}
+
+export interface ConclusionChangeFactor {
+  description: string;
+  evidenceNeeded: string;
+  impact: string;
+}
+
+export interface ClosureAssessment {
+  status: ClosureStatus;
+  rationale: string;
+  unresolvedMaterialIssues: string[];
+  whatWouldChangeConclusion: ConclusionChangeFactor[];
 }
 
 export interface DisciplineFactor {
@@ -89,6 +132,9 @@ export interface AnalysisResult {
   researchProfile?: string | null;
   evidenceItems: EvidenceItem[];
   findings: TraceableFinding[];
+  hypotheses: InvestigationHypothesis[];
+  sufficiencyChecks: SufficiencyCheck[];
+  closureAssessment: ClosureAssessment;
   disciplineFactors: DisciplineFactor[];
   disciplineRange: DisciplineRange;
   policyQuestions: string[];
