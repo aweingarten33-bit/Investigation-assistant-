@@ -16,9 +16,20 @@ export async function exportToDocx(result: AnalysisResult) {
 
   children.push(new Paragraph({ children: [new TextRun({ text: "Compliance Investigation Report", bold: true, size: 36, color: "2563EB", font: "Arial" })], spacing: { after: 100 } }));
   children.push(new Paragraph({ children: [new TextRun({ text: `Case: ${result.caseId}`, size: 22, color: "646464", font: "Arial" })], spacing: { after: 50 } }));
-  children.push(new Paragraph({ children: [new TextRun({ text: `Generated: ${new Date().toLocaleString()}`, size: 22, color: "646464", font: "Arial" })], spacing: { after: 50 } }));
+  children.push(new Paragraph({ children: [new TextRun({ text: `Generated: ${result.analysisMetadata ? new Date(result.analysisMetadata.generatedAt).toLocaleString() : new Date().toLocaleString()}`, size: 22, color: "646464", font: "Arial" })], spacing: { after: 50 } }));
   children.push(new Paragraph({ children: [new TextRun({ text: `AI decision support: ${decisionLabel}  |  Risk: ${result.riskLevel.toUpperCase()}  |  Confidence: ${result.confidenceScore}%`, size: 22, color: "646464", font: "Arial" })], spacing: { after: 200 } }));
   children.push(new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" } }, spacing: { after: 200 } }));
+
+  if (result.analysisMetadata) {
+    children.push(heading("CASE PROVENANCE / ANALYSIS VERSION"));
+    children.push(paragraph(`Analysis version: ${result.analysisMetadata.analysisVersion}`));
+    children.push(paragraph(`Source fingerprint: ${result.analysisMetadata.sourceFingerprint}`));
+    children.push(paragraph(`Evidence items mapped: ${result.analysisMetadata.evidenceCount}; decision-support findings: ${result.analysisMetadata.findingCount}`));
+    children.push(paragraph(`Organization-specific discipline matrix applied: ${result.analysisMetadata.organizationContextApplied ? "Yes" : "No"}`));
+    children.push(paragraph(`Regulatory research topic: ${result.analysisMetadata.researchTopic || "None / unavailable"}`));
+    children.push(paragraph("This provenance record belongs to the current analysis/export. The demo does not persist an immutable authenticated audit log across sessions."));
+    children.push(spacer());
+  }
 
   if (result.humanReview) {
     children.push(heading("HUMAN REVIEW — FINAL RECORDED DISPOSITION"));
@@ -119,7 +130,7 @@ export async function exportToDocx(result: AnalysisResult) {
   children.push(paragraph(result.conclusion));
   children.push(spacer());
   children.push(new Paragraph({ children: [new TextRun({ text: "Confidential – Internal Use Only", size: 16, color: "999999", font: "Arial", italics: true })], spacing: { after: 50 } }));
-  children.push(new Paragraph({ children: [new TextRun({ text: "Demo version – use anonymized data only. Production deployment requires appropriate privacy/security review, agreements, access controls, audit logging, and secure hosting.", size: 16, color: "999999", font: "Arial", italics: true })] }));
+  children.push(new Paragraph({ children: [new TextRun({ text: "Demo version – use anonymized data only. Production deployment requires appropriate privacy/security review, agreements, access controls, persistent authenticated audit logging, and secure hosting.", size: 16, color: "999999", font: "Arial", italics: true })] }));
 
   const doc = new Document({
     sections: [{ properties: { type: SectionType.CONTINUOUS, page: { margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } }, children }],
