@@ -34,16 +34,8 @@ export const REGULATORY_SOURCES = {
     lastVerified: "2026-08-22",
     version: "2026-08-22.2",
     revisionHistory: [
-      {
-        version: "2026-08-22.1",
-        verifiedOn: "2026-08-22",
-        note: "Verified 60-day outer limit and without-unreasonable-delay language against HHS guidance and the codified rule.",
-      },
-      {
-        version: "2026-08-22.2",
-        verifiedOn: "2026-08-22",
-        note: "Re-verified discovery-based timing, individual notice, and media-notice relationship during full deadline audit.",
-      },
+      { version: "2026-08-22.1", verifiedOn: "2026-08-22", note: "Verified 60-day outer limit and without-unreasonable-delay language against HHS guidance and the codified rule." },
+      { version: "2026-08-22.2", verifiedOn: "2026-08-22", note: "Re-verified discovery-based timing, individual notice, and media-notice relationship during full deadline audit." },
     ],
   },
   hipaa_secretary_notice: {
@@ -59,16 +51,8 @@ export const REGULATORY_SOURCES = {
     lastVerified: "2026-08-22",
     version: "2026-08-22.2",
     revisionHistory: [
-      {
-        version: "2026-08-22.1",
-        verifiedOn: "2026-08-22",
-        note: "Verified separate reporting timing for breaches affecting 500 or more individuals and fewer than 500 individuals.",
-      },
-      {
-        version: "2026-08-22.2",
-        verifiedOn: "2026-08-22",
-        note: "Re-verified against HHS breach-reporting page last reviewed February 13, 2026; page now covers HIPAA and Part 2 reporting.",
-      },
+      { version: "2026-08-22.1", verifiedOn: "2026-08-22", note: "Verified separate reporting timing for breaches affecting 500 or more individuals and fewer than 500 individuals." },
+      { version: "2026-08-22.2", verifiedOn: "2026-08-22", note: "Re-verified against HHS breach-reporting page last reviewed February 13, 2026; page now covers HIPAA and Part 2 reporting." },
     ],
   },
   hipaa_business_associate_notice: {
@@ -84,16 +68,8 @@ export const REGULATORY_SOURCES = {
     lastVerified: "2026-08-22",
     version: "2026-08-22.2",
     revisionHistory: [
-      {
-        version: "2026-08-22.1",
-        verifiedOn: "2026-08-22",
-        note: "Verified business-associate notification requirement and 60-day federal outer limit; contractual BAAs may be shorter.",
-      },
-      {
-        version: "2026-08-22.2",
-        verifiedOn: "2026-08-22",
-        note: "Re-verified during full deadline audit; contractual notice periods remain separate from the federal outer limit.",
-      },
+      { version: "2026-08-22.1", verifiedOn: "2026-08-22", note: "Verified business-associate notification requirement and 60-day federal outer limit; contractual BAAs may be shorter." },
+      { version: "2026-08-22.2", verifiedOn: "2026-08-22", note: "Re-verified during full deadline audit; contractual notice periods remain separate from the federal outer limit." },
     ],
   },
   part2_breach_notification: {
@@ -110,11 +86,7 @@ export const REGULATORY_SOURCES = {
     lastVerified: "2026-08-22",
     version: "2026-08-22.1",
     revisionHistory: [
-      {
-        version: "2026-08-22.1",
-        verifiedOn: "2026-08-22",
-        note: "Added after the February 16, 2026 Part 2 compliance date; Part 2 programs now follow HIPAA-style breach notification requirements for unsecured Part 2 records.",
-      },
+      { version: "2026-08-22.1", verifiedOn: "2026-08-22", note: "Added after the February 16, 2026 Part 2 compliance date; Part 2 programs now follow HIPAA-style breach notification requirements for unsecured Part 2 records." },
     ],
   },
   hipaa_right_of_access: {
@@ -130,11 +102,7 @@ export const REGULATORY_SOURCES = {
     lastVerified: "2026-08-22",
     version: "2026-08-22.1",
     revisionHistory: [
-      {
-        version: "2026-08-22.1",
-        verifiedOn: "2026-08-22",
-        note: "Verified 30-calendar-day outer limit and one additional extension of no more than 30 calendar days with timely written notice.",
-      },
+      { version: "2026-08-22.1", verifiedOn: "2026-08-22", note: "Verified 30-calendar-day outer limit and one additional extension of no more than 30 calendar days with timely written notice." },
     ],
   },
   cms_ltc_alleged_violations: {
@@ -150,16 +118,8 @@ export const REGULATORY_SOURCES = {
     lastVerified: "2026-08-22",
     version: "2026-08-22.2",
     revisionHistory: [
-      {
-        version: "2026-08-22.1",
-        verifiedOn: "2026-08-22",
-        note: "Verified that the 2-hour/24-hour framework is scoped to covered LTC alleged-violation reporting under §483.12(c), not a universal hospital deadline.",
-      },
-      {
-        version: "2026-08-22.2",
-        verifiedOn: "2026-08-22",
-        note: "Added the separate requirement to report investigation results within 5 working days and re-verified current F609 guidance.",
-      },
+      { version: "2026-08-22.1", verifiedOn: "2026-08-22", note: "Verified that the 2-hour/24-hour framework is scoped to covered LTC alleged-violation reporting under §483.12(c), not a universal hospital deadline." },
+      { version: "2026-08-22.2", verifiedOn: "2026-08-22", note: "Added the separate requirement to report investigation results within 5 working days and re-verified current F609 guidance." },
     ],
   },
   cms_ltc_suspected_crime: {
@@ -175,11 +135,7 @@ export const REGULATORY_SOURCES = {
     lastVerified: "2026-08-22",
     version: "2026-08-22.1",
     revisionHistory: [
-      {
-        version: "2026-08-22.1",
-        verifiedOn: "2026-08-22",
-        note: "Added as a separate obligation from facility alleged-violation reporting: covered individuals report reasonable suspicion of a crime to the State Agency and local law enforcement within the statutory timeframe.",
-      },
+      { version: "2026-08-22.1", verifiedOn: "2026-08-22", note: "Added as a separate obligation from facility alleged-violation reporting: covered individuals report reasonable suspicion of a crime to the State Agency and local law enforcement within the statutory timeframe." },
     ],
   },
   ny_phl_2803d: {
@@ -195,11 +151,7 @@ export const REGULATORY_SOURCES = {
     lastVerified: "2026-08-22",
     version: "2026-08-22.1",
     revisionHistory: [
-      {
-        version: "2026-08-22.1",
-        verifiedOn: "2026-08-22",
-        note: "Verified current statutory requirement for mandated reporters to report suspected abuse, mistreatment, neglect, or misappropriation immediately by telephone and in writing within 48 hours to NYSDOH.",
-      },
+      { version: "2026-08-22.1", verifiedOn: "2026-08-22", note: "Verified current statutory requirement for mandated reporters to report suspected abuse, mistreatment, neglect, or misappropriation immediately by telephone and in writing within 48 hours to NYSDOH." },
     ],
   },
   ny_data_breach_899aa: {
@@ -215,11 +167,71 @@ export const REGULATORY_SOURCES = {
     lastVerified: "2026-08-22",
     version: "2026-08-22.1",
     revisionHistory: [
-      {
-        version: "2026-08-22.1",
-        verifiedOn: "2026-08-22",
-        note: "Verified current 30-day outer limit for affected-resident notice, state-agency notification requirements, and the separate 5-business-day NY Attorney General notice after HHS notification for HIPAA/HITECH breaches.",
-      },
+      { version: "2026-08-22.1", verifiedOn: "2026-08-22", note: "Verified current 30-day outer limit for affected-resident notice, state-agency notification requirements, and the separate 5-business-day NY Attorney General notice after HHS notification for HIPAA/HITECH breaches." },
+    ],
+  },
+  nyports_hospital_adverse_events: {
+    id: "nyports_hospital_adverse_events",
+    title: "New York Hospital Adverse Event Reporting (NYPORTS)",
+    authority: "New York State Department of Health / New York State Legislature",
+    jurisdiction: "New York — Article 28 hospitals and diagnostic and treatment centers",
+    sourceType: "regulation",
+    citation: "10 NYCRR §405.8; N.Y. Public Health Law §2805-l",
+    url: "https://www.health.ny.gov/facilities/hospital/nyports/",
+    status: "current",
+    effectiveDate: "2013-05-29",
+    lastVerified: "2026-08-22",
+    version: "2026-08-22.1",
+    revisionHistory: [
+      { version: "2026-08-22.1", verifiedOn: "2026-08-22", note: "Verified NYPORTS remains the mandatory Article 28 adverse-event reporting system; reportable adverse events are submitted within 24 hours or one business day, with statutory investigation/report follow-up requirements." },
+    ],
+  },
+  ny_hospital_professional_misconduct: {
+    id: "ny_hospital_professional_misconduct",
+    title: "New York Hospital Reporting of Possible Professional Misconduct",
+    authority: "New York State Legislature",
+    jurisdiction: "New York — Article 28 hospitals and other covered facilities",
+    sourceType: "statute",
+    citation: "N.Y. Public Health Law §2803-e",
+    url: "https://www.nysenate.gov/legislation/laws/PBH/2803-E%2A2",
+    status: "current",
+    effectiveDate: null,
+    lastVerified: "2026-08-22",
+    version: "2026-08-22.1",
+    revisionHistory: [
+      { version: "2026-08-22.1", verifiedOn: "2026-08-22", note: "Verified 30-day reporting requirement for specified adverse actions/resignations involving licensed professionals or medical residents when related to impairment, incompetence, malpractice, misconduct, or patient safety/welfare." },
+    ],
+  },
+  dea_theft_significant_loss: {
+    id: "dea_theft_significant_loss",
+    title: "DEA Controlled-Substance Theft or Significant Loss",
+    authority: "U.S. Drug Enforcement Administration (DEA)",
+    jurisdiction: "United States — Federal / DEA registrants, including hospitals and pharmacies",
+    sourceType: "regulation",
+    citation: "21 CFR §1301.74(c); DEA Form 106",
+    url: "https://www.dea.gov/documents/2024/2024-12/2024-12-12/drugs-abuse-2024-edition",
+    status: "current",
+    effectiveDate: null,
+    lastVerified: "2026-08-22",
+    version: "2026-08-22.1",
+    revisionHistory: [
+      { version: "2026-08-22.1", verifiedOn: "2026-08-22", note: "Verified direct written notice to the local DEA Field Division Office within one business day after discovery of theft or significant loss; DEA Form 106 documents the theft/loss." },
+    ],
+  },
+  emtala_recipient_hospital_reporting: {
+    id: "emtala_recipient_hospital_reporting",
+    title: "EMTALA Recipient Hospital Reporting of Suspected Improper Transfer",
+    authority: "Centers for Medicare & Medicaid Services (CMS)",
+    jurisdiction: "United States — Federal / Medicare-participating hospitals",
+    sourceType: "regulation",
+    citation: "42 CFR §489.20(m); State Operations Manual Appendix V",
+    url: "https://www.cms.gov/medicare/regulations-guidance/legislation/emergency-medical-treatment-labor-act",
+    status: "current",
+    effectiveDate: null,
+    lastVerified: "2026-08-22",
+    version: "2026-08-22.1",
+    revisionHistory: [
+      { version: "2026-08-22.1", verifiedOn: "2026-08-22", note: "Verified CMS interpretive guidance that a recipient hospital that suspects an improper unstable transfer should report the incident to CMS or the State Survey Agency within 72 hours." },
     ],
   },
   medicare_overpayment_401305: {
@@ -236,11 +248,7 @@ export const REGULATORY_SOURCES = {
     lastVerified: "2026-08-22",
     version: "2026-08-22.1",
     revisionHistory: [
-      {
-        version: "2026-08-22.1",
-        verifiedOn: "2026-08-22",
-        note: "Verified current 60-day report-and-return rule and up-to-180-day suspension for a timely, good-faith investigation of related overpayments; the 180 days is not a blanket pre-identification investigation period.",
-      },
+      { version: "2026-08-22.1", verifiedOn: "2026-08-22", note: "Verified current 60-day report-and-return rule and up-to-180-day suspension for a timely, good-faith investigation of related overpayments; the 180 days is not a blanket pre-identification investigation period." },
     ],
   },
   hipaa_security_nprm_2024: {
@@ -257,16 +265,8 @@ export const REGULATORY_SOURCES = {
     lastVerified: "2026-08-22",
     version: "2026-08-22.2",
     revisionHistory: [
-      {
-        version: "2026-08-22.1",
-        verifiedOn: "2026-08-22",
-        note: "Verified that the 72-hour item concerns proposed restoration procedures for certain systems/data; it is not a 72-hour HHS breach-notification deadline.",
-      },
-      {
-        version: "2026-08-22.2",
-        verifiedOn: "2026-08-22",
-        note: "Re-verified against HHS Security Rule pages updated in 2026; the proposal remains an NPRM and the current Security Rule remains in effect.",
-      },
+      { version: "2026-08-22.1", verifiedOn: "2026-08-22", note: "Verified that the 72-hour item concerns proposed restoration procedures for certain systems/data; it is not a 72-hour HHS breach-notification deadline." },
+      { version: "2026-08-22.2", verifiedOn: "2026-08-22", note: "Re-verified against HHS Security Rule pages updated in 2026; the proposal remains an NPRM and the current Security Rule remains in effect." },
     ],
   },
   oig_gcpg: {
@@ -283,16 +283,8 @@ export const REGULATORY_SOURCES = {
     lastVerified: "2026-08-22",
     version: "2026-08-22.2",
     revisionHistory: [
-      {
-        version: "2026-08-22.1",
-        verifiedOn: "2026-08-22",
-        note: "Registered as compliance-program guidance, not a universal investigation deadline.",
-      },
-      {
-        version: "2026-08-22.2",
-        verifiedOn: "2026-08-22",
-        note: "Re-verified as current voluntary, nonbinding guidance; no universal internal investigation completion deadline was inferred from it.",
-      },
+      { version: "2026-08-22.1", verifiedOn: "2026-08-22", note: "Registered as compliance-program guidance, not a universal investigation deadline." },
+      { version: "2026-08-22.2", verifiedOn: "2026-08-22", note: "Re-verified as current voluntary, nonbinding guidance; no universal internal investigation completion deadline was inferred from it." },
     ],
   },
 } as const satisfies Record<string, RegulatorySource>;
