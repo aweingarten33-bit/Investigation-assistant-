@@ -2,7 +2,7 @@
 
 _Last updated: 2026-08-22_
 
-This audit describes the current architecture after the evidence-traceability, discipline-engine, search-privacy, and human-review overhaul.
+This audit describes the current architecture after the evidence-traceability, discipline-engine, search-privacy, organization-matrix, provenance, and human-review overhaul.
 
 ## Current architecture
 
@@ -12,11 +12,12 @@ This audit describes the current architecture after the evidence-traceability, d
 4. A non-search structured AI call selects exactly one value from a closed regulatory taxonomy.
 5. The server maps that enum to a fixed server-owned generic research topic; only that generic topic is sent to the search-enabled AI call.
 6. Structured classification produces evidence references, findings, risk, discipline factors, action range, and open policy questions.
-7. Server validates the response with Zod and reconstructs evidence excerpts from the submitted source lines.
+7. Server validates the response with Zod, rejects invalid evidence ranges, verifies source labels locally, and reconstructs evidence excerpts from the submitted source lines.
 8. The classification is HMAC-signed together with a SHA-256 hash of the exact notes + organization-specific context.
 9. Step 2 verifies that binding before generating the report.
 10. A human reviewer may explicitly approve, modify, reject, or defer the AI recommendation and record the actual final finding/action and rationale.
-11. Results may be exported to Word with an Evidence Traceability Appendix and the saved Human Review Record.
+11. The current case result records analysis provenance (analysis version, timestamp, source fingerprint, research topic, organization-context use, evidence/finding counts) and the human-review event.
+12. Results may be exported to Word with provenance, an Evidence Traceability Appendix, and the saved Human Review Record.
 
 ## Controls in place
 
@@ -26,7 +27,8 @@ This audit describes the current architecture after the evidence-traceability, d
 - Model evidence objects contain only line ranges and summaries.
 - Displayed evidence quotations/excerpts are reconstructed server-side from the actual submitted lines.
 - Invalid evidence IDs referenced by findings/factors are removed.
-- Out-of-range model line offsets are clamped to the submitted source.
+- Out-of-range, reversed, or otherwise invalid model line ranges are **discarded**, not clamped onto real source text.
+- A model-suggested source label is shown only when that label can be verified in a small local window around the cited source lines; otherwise the label falls back to `Investigation Notes`.
 - Contradictory evidence remains visible and changes the calculated evidence-status label.
 - Findings without valid evidence are downgraded to `insufficient`.
 - A `corroborated` status is recomputed from valid evidence rather than trusted directly from model output.
@@ -78,12 +80,28 @@ The current engine:
 - explicitly identifies missing organization-specific questions;
 - requires HR/Legal review for serious action;
 - treats `recommendationTier` only as a coarse legacy workflow label rather than the decision engine;
-- provides an organization-context field so users can supply their actual policy/matrix/precedent/CBA rules;
+- supports `policy_review` when organization-specific criteria are missing;
 - no longer auto-calculates a discipline band in the manual Decision Framework.
 
-### Human review safeguard
+### Organization-configurable discipline matrix
 
-The main report workflow now includes a Human Review Record. The reviewer can:
+Both the full report workflow and standalone AI decision-support tool use the same structured configuration fields:
+
+- standard of proof / finding rule;
+- applicable policy / code-of-conduct rules;
+- organization disciplinary/corrective-action matrix;
+- anonymized comparable precedent;
+- CBA / union / due-process requirements;
+- prior-discipline / progressive-discipline rules;
+- training / role / access expectations;
+- required HR / Legal / leadership approvals;
+- other organization-specific criteria.
+
+Those values are serialized into clearly labeled organization context and treated as decision criteria, not case evidence. The exact serialized context is included in the `inputHash`, so changing it after classification invalidates the signed classification.
+
+### Human review and provenance safeguards
+
+The main report workflow includes a Human Review Record. The reviewer can:
 
 - approve the AI decision support;
 - approve it with changes;
@@ -96,7 +114,9 @@ The main report workflow now includes a Human Review Record. The reviewer can:
 
 The saved human decision is included in exports and downstream letter-prefill data ahead of the AI recommendation. If no human review exists, those downstream artifacts explicitly state that the AI action range is not an authorized final employment decision.
 
-**Residual limitation:** this review record lives in the current client-side case result. It is not yet a persistent, immutable, authenticated enterprise approval record.
+The current result also carries analysis provenance: analysis-version identifier, generation timestamp, source fingerprint, organization-context flag, generic regulatory research topic, evidence count, and finding count.
+
+**Residual limitation:** these records live in the current client-side case result/export. They are not yet a persistent, immutable, authenticated enterprise approval/audit record.
 
 ### API/cost hardening
 
@@ -115,7 +135,9 @@ The static deadline/reference library now:
 - scopes the CMS 2-hour/24-hour alleged-violation rule to LTC facilities under 42 CFR §483.12(c), rather than presenting it as a universal hospital immediate-jeopardy rule;
 - keeps proposed rules visually separate from current requirements;
 - labels internal investigation targets as organization governance targets rather than universal federal deadlines;
-- links users to primary HHS/CMS/OIG sources.
+- links users to primary HHS/CMS/OIG sources;
+- describes NYC Local Law 144 narrowly as candidate/employment and promotion screening rather than a general employee-discipline mandate;
+- separately flags Illinois employment-AI requirements relevant to discipline without turning that statement into universal legal advice.
 
 ## Regression testing / CI
 
@@ -127,8 +149,9 @@ The placeholder always-passing test has been removed.
 - input-hash binding to both notes and organization context;
 - exact evidence-excerpt reconstruction;
 - removal of invented evidence IDs;
+- rejection of out-of-range and reversed model line ranges;
 - evidence-status recalculation when contradictory evidence exists;
-- clamping invalid model line ranges;
+- contradiction-only handling;
 - corroboration status only when two valid supporting items remain;
 - filtering invalid evidence references from discipline factors.
 
@@ -137,6 +160,12 @@ The placeholder always-passing test has been removed.
 - every permitted category maps to a server-owned topic;
 - arbitrary/free-text categories map to no topic;
 - prompt-injection-like text cannot become a search topic.
+
+Frontend/unit tests also cover:
+
+- organization discipline-context serialization;
+- organization matrix UI fields/editing;
+- current-case provenance rendering.
 
 CI is configured to run `npm run check:server`, `npm test`, `npm run build`, and `npm run lint` after `npm ci`. The explicit server syntax gate exists because the Vite build does not compile-check the Express route files.
 
@@ -148,7 +177,7 @@ The app is still a demo. Anyone who can reach the service can use it. A producti
 
 ### 2. No persistent enterprise audit trail
 
-A human review can now be captured in the current case result/export, but there is still no persistent case database, immutable event log, authenticated reviewer signature, chain-of-custody record, assignment history, or versioned case history. Those remain major requirements for an enterprise investigative workbench.
+A human review and provenance record can now be captured in the current case result/export, but there is still no persistent case database, immutable event log, authenticated reviewer signature, chain-of-custody record, assignment history, or versioned case history. Those remain major requirements for an enterprise investigative workbench.
 
 ### 3. PHI/PII contractual/compliance readiness is not established
 
@@ -179,7 +208,7 @@ The next major architectural step is persistent, auditable case management rathe
 - authenticated reviewer assignments, approvals, and overrides;
 - immutable audit events;
 - evidence upload/storage controls;
-- configurable organization policy/matrix objects rather than free-text context alone;
+- server-persisted organization policy/matrix objects with versioning and approval ownership;
 - model/prompt/version logging;
 - evaluation dashboards and bias/outcome monitoring;
 - retention/legal-hold support;
