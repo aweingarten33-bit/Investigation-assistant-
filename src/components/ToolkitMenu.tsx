@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Menu, X, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -95,10 +96,16 @@ export function ToolkitMenuButton({ activeId, onSelect, className, label }: { ac
         <Menu className="w-5 h-5" />
         {label}
       </button>
-      {open && (
+      {open && createPortal(
+        // Rendered into document.body via portal rather than in place: a
+        // `fixed` element inside an ancestor with backdrop-filter/filter/
+        // transform is positioned relative to THAT ancestor, not the
+        // viewport (a real CSS spec behavior, not a Tailwind quirk) — the
+        // sticky mobile header uses backdrop-blur, which broke this drawer's
+        // full-screen coverage when it was rendered inline.
         <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" onClick={() => setOpen(false)} />
-          <div className="absolute inset-y-0 left-0 w-[85%] max-w-[340px] bg-background shadow-2xl overflow-y-auto animate-in slide-in-from-left duration-200">
+          <div className="absolute inset-0 bg-foreground/60 backdrop-blur-sm" onClick={() => setOpen(false)} />
+          <div className="absolute inset-y-0 left-0 w-[85%] max-w-[340px] bg-background shadow-2xl overflow-y-auto animate-in slide-in-from-left duration-150">
             <div className="px-4 py-3 border-b border-border flex items-center justify-between">
               <h2 className="text-base font-bold text-foreground">Investigation Toolkit</h2>
               <button
@@ -116,7 +123,8 @@ export function ToolkitMenuButton({ activeId, onSelect, className, label }: { ac
               />
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
