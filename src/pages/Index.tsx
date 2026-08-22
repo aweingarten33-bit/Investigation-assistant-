@@ -9,7 +9,7 @@ import { AnalysisResults } from "@/components/AnalysisResults";
 import { PiiReminder } from "@/components/PiiReminder";
 import { Disclaimer } from "@/components/Disclaimer";
 import { exportToDocx } from "@/lib/docx-export";
-import { AnalysisResult } from "@/lib/types";
+import { AnalysisResult, HumanReviewRecord } from "@/lib/types";
 import { SAMPLE_REPORT_TEXT } from "@/lib/sample-report";
 import { suggestLetterType, buildLetterPrefillDetails, letterButtonLabel } from "@/lib/letter-prefill";
 import {
@@ -43,11 +43,11 @@ const Index = () => {
     return `${(bytes / 1048576).toFixed(1)} MB`;
   };
 
-  const invalidateRun = () => {
+  const invalidateRun = useCallback(() => {
     runIdRef.current++;
     abortRef.current?.abort();
     abortRef.current = null;
-  };
+  }, []);
 
   const handleReset = useCallback(() => {
     invalidateRun();
@@ -60,7 +60,7 @@ const Index = () => {
     setResult(null);
     setIsAnalyzing(false);
     setAnalyzeStep(0);
-  }, []);
+  }, [invalidateRun]);
 
   const handleFileSelect = useCallback(async (file: File) => {
     const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -110,7 +110,7 @@ const Index = () => {
     setIsAnalyzing(false);
     setAnalyzeStep(0);
     toast.info("Analysis cancelled.");
-  }, []);
+  }, [invalidateRun]);
 
   const handleAnalyze = useCallback(async () => {
     const trimmedReportText = reportText.trim();
@@ -195,6 +195,10 @@ const Index = () => {
     }
   }, [reportText, organizationContext]);
 
+  const handleHumanReviewChange = useCallback((review: HumanReviewRecord | undefined) => {
+    setResult((current) => current ? { ...current, humanReview: review } : current);
+  }, []);
+
   const handleExport = useCallback(async () => {
     if (!result) return;
     try {
@@ -234,7 +238,7 @@ const Index = () => {
                 </button>
               )}
             </div>
-            <AnalysisResults result={result} />
+            <AnalysisResults result={result} onHumanReviewChange={handleHumanReviewChange} />
           </>
         ) : (
           <>
