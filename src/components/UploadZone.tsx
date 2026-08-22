@@ -57,36 +57,25 @@ export function UploadZone({
     [onFileSelect],
   );
 
-  const TabBar = (
-    <div className="flex rounded-xl bg-background neu-inset p-1 mb-3">
-      <button
-        type="button"
-        onClick={() => setMode("paste")}
-        className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
-          mode === "paste"
-            ? "bg-background text-foreground neu-raised"
-            : "text-muted-foreground hover:text-foreground"
-        }`}
-      >
-        <Pen className="h-3.5 w-3.5" /> Type / Paste
-      </button>
-      <button
-        type="button"
-        onClick={() => setMode("upload")}
-        className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
-          mode === "upload"
-            ? "bg-background text-foreground neu-raised"
-            : "text-muted-foreground hover:text-foreground"
-        }`}
-      >
-        <Upload className="h-3.5 w-3.5" /> Upload Sources
-      </button>
-    </div>
-  );
-
   return (
     <div>
-      {TabBar}
+      <div className="flex rounded-xl bg-background neu-inset p-1 mb-3">
+        <button
+          type="button"
+          onClick={() => setMode("paste")}
+          className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-all ${mode === "paste" ? "bg-background text-foreground neu-raised" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          <Pen className="h-3.5 w-3.5" /> Type / Paste
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("upload")}
+          className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-all ${mode === "upload" ? "bg-background text-foreground neu-raised" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          <Upload className="h-3.5 w-3.5" /> Upload DOCX / PDF
+        </button>
+      </div>
+
       {mode === "paste" ? (
         <textarea
           ref={textareaRef}
@@ -106,16 +95,11 @@ export function UploadZone({
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-foreground truncate">{fileName}</p>
                 <p className="text-xs text-muted-foreground">
-                  {isSample ? "Sample report" : fileSize} · Source names preserved in the analysis text
+                  {isSample ? "Sample report" : fileSize} · Source filename/page context preserved
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onClear}
-              className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              aria-label="Remove uploaded sources"
-            >
+            <button type="button" onClick={onClear} className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" aria-label="Remove uploaded sources">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -129,18 +113,14 @@ export function UploadZone({
         >
           <Upload className="h-8 w-8 text-muted-foreground" />
           <div className="text-center">
-            <p className="text-sm font-medium text-foreground">
-              Drop one or more source files here, or click to upload
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              .docx, .txt, or .csv · combine interviews, notes, audits, and other text evidence
-            </p>
+            <p className="text-sm font-medium text-foreground">Drop one or more investigation files here, or click to upload</p>
+            <p className="text-xs text-muted-foreground mt-1">DOCX or PDF only · PDFs must contain selectable text</p>
           </div>
           <input
             ref={inputRef}
             type="file"
             multiple
-            accept=".docx,.txt,.csv,text/plain,text/csv,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             className="hidden"
             onChange={handleChange}
           />
