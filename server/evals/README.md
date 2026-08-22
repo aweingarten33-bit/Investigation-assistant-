@@ -1,6 +1,6 @@
-# Investigation AI Evaluation Framework
+# Investigation Assistant AI Evaluation Framework
 
-This directory tests whether the investigation assistant reasons safely and consistently on realistic synthetic cases. It is intentionally separate from ordinary unit tests: application tests answer "does the code work?" while these evaluations answer "does the AI reach a defensible, evidence-grounded result?"
+This directory tests whether the Investigation Assistant reasons safely and consistently on realistic synthetic cases. Ordinary unit tests answer "does the code work?" These evaluations answer "does the AI reach a defensible, evidence-grounded result that is actually useful to the investigator?"
 
 ## Scenario set
 
@@ -64,4 +64,4 @@ Run against an already deployed/configured instance instead of spawning a local 
 npm run eval:ai -- --base-url=https://your-deployment.example
 ```
 
-Live evaluations are intentionally not part of normal CI because they incur provider calls, may invoke regulatory web grounding, and can vary modestly across model/provider versions. They should be run before consequential prompt/model changes and the results should be retained as release evidence when the product moves toward production use.
+Live evaluations are intentionally not part of normal CI because they incur provider calls, may invoke regulatory web grounding, and can vary modestly across model/provider versions. Run them before meaningful prompt/model changes when you want to check whether the Assistant's actual reasoning got better or worse.
