@@ -84,15 +84,15 @@ export function ToolkitMenuButton({ activeId, onSelect, className, label }: { ac
       <button
         onClick={() => setOpen(true)}
         className={cn(
-          "shrink-0 flex items-center justify-center text-foreground",
+          "shrink-0 flex items-center justify-center bg-primary text-primary-foreground shadow-md hover:bg-primary/90 transition-colors",
           label
-            ? "gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary/10 transition-colors whitespace-nowrap"
-            : "w-9 h-9 rounded-lg bg-card neu-button",
+            ? "gap-2 pl-3 pr-4 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap"
+            : "w-11 h-11 rounded-full",
           className
         )}
         aria-label="Open toolkit menu"
       >
-        <Menu className="w-4.5 h-4.5" />
+        <Menu className="w-5 h-5" />
         {label}
       </button>
       {open && (

@@ -186,7 +186,7 @@ const Index = () => {
           <>
             {/* Sticky export bar */}
             <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border -mx-4 px-4 py-3 mb-4">
-              <div className="flex items-center justify-end mb-2">
+              <div className="flex items-center justify-start mb-2">
                 <HomeToolkitMenuButton />
               </div>
               <div className="flex gap-3">
@@ -217,11 +217,11 @@ const Index = () => {
 
               {/* Card Header */}
               <div className="px-5 pt-4 pb-3 border-b border-border">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <HomeToolkitMenuButton />
                   <h1 className="text-base sm:text-xl font-bold text-foreground mb-0.5">
                     Compliance & Privacy Investigation Assistant
                   </h1>
-                  <HomeToolkitMenuButton />
                 </div>
               <p className="text-xs sm:text-sm text-muted-foreground leading-snug">
                   Paste or upload your investigation notes to generate a Summary Investigative Report.
