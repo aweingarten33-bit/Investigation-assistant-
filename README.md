@@ -1,148 +1,183 @@
-# Compliance & Privacy Investigation Assistant
+# Compliance & Privacy Investigation Workbench
 
-A Vite + React app with a small Node/Express API that helps turn de-identified investigation notes into a structured compliance/privacy investigative report — plus an Investigation Toolkit with AI letter drafting, AI case analysis, an AI recommendation engine, and a full investigator reference library (decision framework, HIPAA/CFR deadlines, interview scripts, COI toolkit).
+A React/Vite + Node/Express application for organizing healthcare compliance/privacy investigations, mapping findings to evidence, identifying contradictory evidence and missing information, generating a structured investigative report, and supporting human review of possible corrective actions.
 
-## Important privacy note
+This is intentionally **decision support, not an automated employment decision-maker**.
 
-This demo does **not** save reports anywhere — no database, no browser storage — but investigation notes are sent to this app's own server and then to Anthropic for analysis. Use anonymized/de-identified data only unless the production environment has been reviewed for HIPAA/privacy/security requirements and the appropriate agreements are in place.
+## What changed from the original Investigation Assistant
+
+The product is no longer centered on "paste notes → AI writes a report." The core workflow is now:
+
+1. **Investigation notes** are pasted or extracted from `.docx`.
+2. The server converts the notes into immutable numbered lines (`[L0001]`, `[L0002]`, ...).
+3. The AI builds an **evidence map** using only those source-line references.
+4. The server reconstructs every displayed evidence excerpt from the original submitted lines — the model does not get to invent its own quote/citation.
+5. Findings link to supporting and contradicting evidence IDs.
+6. The engine separately evaluates compliance/regulatory risk and the factors relevant to corrective action.
+7. Corrective action is presented as a **minimum → recommended-for-review → maximum range**, with organization-specific open questions where policy/precedent/CBA facts are missing.
+8. The report and Word export include an **Evidence Traceability Appendix**.
+
+## Evidence traceability
+
+Each traceable finding includes:
+
+- the finding statement;
+- a separate AI inference/explanation;
+- evidence status (`corroborated`, `single source`, `contradicted`, etc.);
+- supporting evidence IDs;
+- contradicting evidence IDs;
+- source label and exact line range;
+- the exact excerpt reconstructed by the server from the submitted notes.
+
+Invalid or out-of-range evidence IDs/line references are filtered/clamped server-side before results are returned.
+
+## Corrective-action / discipline design
+
+The app does **not** use a rule such as "1 incident = coaching / 10 incidents = termination" and does not map risk level directly to discipline.
+
+The AI is instructed to evaluate, when evidence exists:
+
+- intent;
+- role/access expectations;
+- information sensitivity;
+- actual harm;
+- potential harm;
+- concealment;
+- cooperation;
+- prior discipline;
+- prior training;
+- policy language;
+- organizational precedent;
+- union/CBA constraints;
+- leadership role;
+- retaliation;
+- personal benefit;
+- fraud;
+- patient safety;
+- regulatory reporting implications.
+
+Users can optionally paste **organization-specific discipline context** such as policy language, a disciplinary matrix, anonymized precedent, HR rules, CBA requirements, or approval thresholds. That information is treated as decision criteria, **not case evidence**. If material organization-specific information is missing, the model is expected to mark the recommendation policy-dependent and identify the questions that must be resolved.
+
+The manual Decision Framework follows the same philosophy and no longer automatically derives a discipline level from intent or a factor count.
+
+## Privacy model
+
+This demo does **not** persist reports in a database or browser storage. Investigation notes are transmitted to this app's server and then to the configured AI provider for inference. Use anonymized/de-identified data unless a production deployment has completed the necessary privacy/security review and agreements.
+
+### Search privacy boundary
+
+Current regulatory context is gathered in a separate process:
+
+1. The normal non-search AI call receives case text and extracts a short **generic violation taxonomy**.
+2. Only that generic taxonomy is sent to the provider's web-search capability.
+3. The raw case notes are **not sent to the search-enabled call**.
+4. Search results are labeled **"Current regulatory context consulted"**, not "proof" of the case finding or disciplinary recommendation.
+
+Search context is background only and may never be treated as case evidence.
+
+## Integrity and validation safeguards
+
+- API keys are server-side only.
+- Request-size limits are enforced by Express while reading request bodies.
+- Per-IP rate limiting uses Express's proxy-aware `req.ip` and periodically removes stale buckets.
+- Structured model output is validated server-side with **Zod** after provider tool/function calling.
+- The classification is HMAC-signed.
+- The signature is bound to a SHA-256 hash of **both the exact investigation notes and organization-specific context**. Changing either between classification and report generation forces a re-classification.
+- Client cancellation uses `AbortController`, so cancelling an analysis actually aborts the HTTP request instead of merely ignoring a late response.
+- The report prompt is required to preserve material contradictory evidence and avoid stock regulatory citations when applicability is uncertain.
+
+## Regulatory reference library
+
+The Regulatory Deadlines page was narrowed to scoped, primary-source timing references rather than broad universal claims. In particular:
+
+- HIPAA breach notification remains "without unreasonable delay" and generally no later than 60 calendar days for required individual/large-breach HHS notices under the Breach Notification Rule.
+- The CMS 2-hour/24-hour alleged-violation reporting rule is presented specifically as an **LTC facility** rule under 42 CFR §483.12(c), not a universal hospital "immediate jeopardy" deadline.
+- The 2024 HIPAA Security Rule NPRM's **72-hour proposal** is correctly described as a proposal concerning restoration procedures for certain electronic information systems/data — not a proposed 72-hour HHS breach-notification deadline.
+- Proposed rules are visually separated from current requirements.
+
+Always verify facility type, state law, contracts/BAAs, Part 2, payer/accreditor rules, and current regulatory status before official use.
 
 ## Architecture
 
-One app, two processes in dev, one process in production:
+Production is one Node process/origin:
 
-- **Frontend** — Vite + React, built to static files (`dist/`).
-- **API** — a small Express server (`server/`) that calls Anthropic. It's the
-  only thing that ever sees `ANTHROPIC_API_KEY`; the browser never talks to
-  Anthropic directly.
-
-In production, `server/index.js` serves both — the built frontend as static
-files and the two API routes — from a single process on a single origin. No
-CORS, no third-party backend account, no client-exposed credentials beyond
-the app's own URL. (This app was originally scaffolded with Supabase Edge
-Functions as the backend; that dependency has been removed — see AUDIT.md.)
+- **Frontend:** Vite + React (`dist/`)
+- **API:** Express (`server/`)
+- **AI abstraction:** `server/lib/ai.js`
+- **Providers:** Anthropic, OpenAI, Gemini
+- **Evidence utilities:** `server/lib/investigation-utils.js`
+- **Main investigation route:** `server/routes/analyze-report.js`
+- **Letter generator route:** `server/routes/investigation-toolkit.js`
 
 ## Local setup
 
-You need two processes running:
-
 ```sh
 npm install
-cp .env.example .env    # then set ANTHROPIC_API_KEY
-
-npm run dev:server   # the API, on :3000
-npm run dev          # the frontend, on :8080 — proxies /api to :3000
+cp .env.example .env
+npm run dev:server
+npm run dev
 ```
 
 Open `http://localhost:8080`.
 
 ## Environment variables
 
-Set these where the API process runs (locally: `.env`; in production: your
-host's dashboard). None of them are needed by the frontend build.
-
-The AI backend is provider-agnostic. Pick one with `AI_PROVIDER` (defaults
-to `anthropic`) and set that provider's key + model — the other providers'
-variables can stay unset:
-
 ```sh
-AI_PROVIDER=anthropic                       # optional — anthropic (default) | openai | gemini
+AI_PROVIDER=anthropic                       # anthropic | openai | gemini
 
-ANTHROPIC_API_KEY=your_anthropic_key        # required if AI_PROVIDER=anthropic
-ANTHROPIC_MODEL=claude-sonnet-5             # optional, has a default
+ANTHROPIC_API_KEY=...
+ANTHROPIC_MODEL=claude-sonnet-5
 
-OPENAI_API_KEY=your_openai_key              # required if AI_PROVIDER=openai
-OPENAI_MODEL=gpt-4o                         # required if AI_PROVIDER=openai — no default, on purpose (see below)
+OPENAI_API_KEY=...
+OPENAI_MODEL=...                            # required when provider=openai
 
-GEMINI_API_KEY=your_google_ai_key           # required if AI_PROVIDER=gemini
-GEMINI_MODEL=gemini-3.6-flash               # required if AI_PROVIDER=gemini — no default, on purpose (see below); confirmed live Aug 2026
+GEMINI_API_KEY=...
+GEMINI_MODEL=...                            # required when provider=gemini
 
-CLASSIFICATION_SIGNING_SECRET=...           # optional, falls back to whichever provider key is set
-PORT=3000                                   # optional, Render sets this itself
+CLASSIFICATION_SIGNING_SECRET=...           # strongly recommended in production
+PORT=3000
 ```
 
-`OPENAI_MODEL`/`GEMINI_MODEL` have no built-in fallback. The original
-`ANTHROPIC_MODEL` default shipped with this app was a guessed value that
-turned out not to be a real model — every call silently 400'd until someone
-actually tried it against a live key. Rather than repeat that for two more
-providers, those two are required: get the exact model id from your
-provider's own docs/dashboard and set it explicitly.
-
-## Deploying (Render)
-
-One service, one deploy:
-
-1. Push this repo to GitHub (if it isn't already).
-2. In the Render dashboard: **New > Blueprint**, connect the repo. Render
-   reads `render.yaml` at the repo root and configures the service
-   automatically — build (`npm ci && npm run build`), start
-   (`npm start`, which runs `node server/index.js`).
-3. Render will prompt for every var marked `sync: false` in `render.yaml`
-   (see Environment variables above). You only need to fill in the key +
-   model for whichever `AI_PROVIDER` you're using — leave the rest blank.
-   These are runtime server secrets, never baked into the frontend bundle.
-4. Deploy. Render gives you a `*.onrender.com` URL serving the whole app.
-
-For later pushes: Blueprint-created services don't always auto-redeploy
-reliably on every push — if a push doesn't show up, go to the Blueprint
-page in Render and click **Manual Sync**.
+If no persistent signing secret/provider key exists at startup, the server uses an ephemeral signing secret and warns. Production should always set `CLASSIFICATION_SIGNING_SECRET`.
 
 ## Investigation Toolkit
 
-The `/toolkit` route (linked from the top-right of the home page, and from
-"Draft Notification Letter" once a report is generated) adds:
+The `/toolkit` route includes:
 
-- **AI Letter Generator** — drafts determination/notification letters
-  (HR referral memo, counseling memo through termination, plus closure,
-  reporter-update, and self-disclosure templates) from a case summary.
-  Pre-fills from a just-generated report or from AI Recommendation.
-- **AI Recommendation** — once you're done investigating, paste in what you
-  found and get the same classification/discipline-tier determination the
-  full Report Generator produces, plus who to notify and in what order.
-- **Investigation Guide, Regulatory Deadlines, Interview Templates, Decision
-  Framework, Conflict of Interest** — a static, HIPAA-focused investigator
-  reference library. No AI calls, no data leaves the browser.
+- **Investigation Guide**
+- **Conflict of Interest**
+- **Interview Templates**
+- **AI Investigation Decision Support** with evidence traceability
+- **Manual Decision Framework** with independent factor review
+- **Regulatory Deadlines** with scoped primary-source references
+- **AI Letter Generator**
 
-### Live web-search grounding
+## Tests / CI
 
-Both the AI Recommendation tool and the full Report Generator's classification
-step run a live web search before the severity/discipline-tier determination —
-a short, general research pass on current OCR/HHS enforcement trends and
-typical employer disciplinary practice for that *type* of violation. The
-search is deliberately scoped to never include names or other identifying
-details from your notes — it searches on the violation type only (e.g.
-"unauthorized employee access to patient records"), not on the specific case.
-Results are shown as clickable "Grounded in live search" sources under the
-classification card, so the basis for the recommendation is visible, not a
-black box. If the search fails or isn't available for your configured
-provider/model, classification still proceeds normally without it — grounding
-is a soft-fail enhancement, never a blocker. See `.env.example` for the
-OpenAI caveat (requires a `-search-preview` model).
+The placeholder `expect(true).toBe(true)` test has been removed.
 
-All AI tools run through `server/routes/analyze-report.js` and
-`server/routes/investigation-toolkit.js`, which carry forward the same
-hardening the original Supabase functions had (best-effort per-IP rate
-limiting, a hard request-body byte cap, strict input validation, HMAC-signed
-classification integrity) — see AUDIT.md. Same-origin deployment also means
-there's no CORS allowlist to maintain anymore.
+Regression tests cover evidence/integrity utilities including:
 
-## Scripts
+- stable line numbering;
+- exact excerpt reconstruction;
+- cryptographic input hashing;
+- rejection of invented evidence IDs;
+- contradiction handling;
+- clamping invalid model line offsets;
+- corroboration status rules;
+- discipline-factor evidence references.
+
+GitHub Actions runs:
 
 ```sh
-npm run dev          # frontend (Vite dev server, :8080)
-npm run dev:server   # API (Node, :3000) — run alongside npm run dev
-npm run build        # build the frontend to dist/
-npm start            # production: node server/index.js (serves dist/ + API)
+npm ci
+npm test
+npm run build
 npm run lint
-npm run test
-npm run preview      # preview the built frontend only, without the API
 ```
 
-## Fixed in this version
+on pull requests and pushes to `main`.
 
-- Added missing React type imports that can break TypeScript builds.
-- Disabled unnecessary auth session persistence because this app does not use login. *(historical — predates the Supabase removal below)*
-- Added frontend length validation before invoking the AI function.
-- Hardened the backend with method checks, JSON validation, request size limits, and clearer upstream AI errors.
-- Replaced Lovable-specific Playwright config imports with standard `@playwright/test` config.
-- Corrected privacy/disclaimer language so it does not overpromise that data is never sent or shared.
-- Removed the Supabase Edge Function dependency entirely — the AI backend is now a small Express server in `server/`, deployed alongside the frontend as a single Render service. See AUDIT.md for what changed and why the security properties still hold.
+## Production-readiness warning
+
+This repository is a strong demo / decision-support prototype, not a turn-key HIPAA enterprise case-management system. Real PHI/PII production use still requires, at minimum, appropriate contractual arrangements with providers/hosting vendors, authentication and authorization, audit logging, retention/deletion controls, incident response, access reviews, environment hardening, and organization-specific legal/privacy/security assessment.
