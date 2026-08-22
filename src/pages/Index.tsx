@@ -27,7 +27,7 @@ import { HomeToolkitMenuButton } from "@/components/ToolkitMenu";
 const MIN_REPORT_LENGTH = 50;
 const MAX_REPORT_LENGTH = 100_000;
 const MAX_ORG_CONTEXT = 20_000;
-const ANALYSIS_VERSION = "investigation-workbench-v2";
+const ANALYSIS_VERSION = "investigation-assistant-personal-v3";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -261,7 +261,7 @@ const Index = () => {
                 </button>
               )}
             </div>
-            <AnalysisResults result={result} onHumanReviewChange={handleHumanReviewChange} />
+            <AnalysisResults result={result} caseNotes={reportText} onHumanReviewChange={handleHumanReviewChange} />
           </>
         ) : (
           <>
@@ -269,9 +269,9 @@ const Index = () => {
               <div className="px-5 pt-4 pb-3 border-b border-border">
                 <div className="flex items-start gap-3">
                   <HomeToolkitMenuButton />
-                  <h1 className="text-base sm:text-xl font-bold text-foreground mb-0.5">Compliance & Privacy Investigation Workbench</h1>
+                  <h1 className="text-base sm:text-xl font-bold text-foreground mb-0.5">Compliance & Privacy Investigation Assistant</h1>
                 </div>
-                <p className="text-xs sm:text-sm text-muted-foreground leading-snug">Paste or upload investigation notes to map evidence, identify contradictions, assess the finding, and generate a traceable investigative report.</p>
+                <p className="text-xs sm:text-sm text-muted-foreground leading-snug">Paste or upload investigation notes to map the evidence, identify contradictions, assess the finding, generate the report, and tell you exactly what to investigate next.</p>
                 <PiiReminder />
               </div>
 
@@ -298,13 +298,13 @@ const Index = () => {
               <div className="border-t border-border">
                 <button type="button" onClick={() => setShowOrgContext((value) => !value)} className="w-full px-5 py-3 flex items-center gap-2 text-left hover:bg-muted/20 transition-colors">
                   <Building2 className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-xs font-medium text-foreground flex-1">Organization-specific discipline matrix (optional; recommended)</span>
+                  <span className="text-xs font-medium text-foreground flex-1">Optional policy / discipline context</span>
                   <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showOrgContext ? "rotate-180" : ""}`} />
                 </button>
                 {showOrgContext && (
                   <div className="px-5 pb-4">
                     <OrganizationDisciplineMatrix config={organizationConfig} onChange={(next) => { setOrganizationConfig(next); setResult(null); }} maxCharacters={MAX_ORG_CONTEXT} />
-                    <p className="text-[10px] text-muted-foreground text-right mt-2">Serialized decision context: {organizationContext.length.toLocaleString()} / {MAX_ORG_CONTEXT.toLocaleString()}</p>
+                    <p className="text-[10px] text-muted-foreground text-right mt-2">Optional decision context: {organizationContext.length.toLocaleString()} / {MAX_ORG_CONTEXT.toLocaleString()}</p>
                   </div>
                 )}
               </div>
@@ -330,7 +330,7 @@ const Index = () => {
           </>
         )}
 
-        <p className="mt-4 text-center text-[11px] text-muted-foreground">Demo version — use anonymized data only. Production use requires a HIPAA/privacy/security review, appropriate agreements, access controls, audit logging, and secure hosting.</p>
+        <p className="mt-4 text-center text-[11px] text-muted-foreground">Personal-use demo — use anonymized data only. Reports are not saved by this app.</p>
         <p className="mt-2 text-center text-[11px] text-muted-foreground">© {new Date().getFullYear()} Andrew Weingarten. All rights reserved.</p>
       </div>
     </div>
