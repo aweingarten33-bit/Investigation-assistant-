@@ -50,7 +50,7 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
       return;
     }
     if (trimmed.length < MIN_LENGTH) {
-      toast.error("Please provide more detail before asking for decision support.");
+      toast.error("Please provide more detail before asking for a recommendation.");
       return;
     }
     if (trimmed.length > MAX_LENGTH) {
@@ -58,7 +58,7 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
       return;
     }
     if (organizationContext.length > MAX_ORG_CONTEXT) {
-      toast.error("Organization discipline context must be under 20,000 characters.");
+      toast.error("Optional policy / discipline context must be under 20,000 characters.");
       return;
     }
 
@@ -88,13 +88,12 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
     <div className="space-y-4">
       <div className="flex items-center gap-2 mb-1">
         <Sparkles className="w-4 h-4 text-primary" />
-        <p className="text-sm font-semibold text-foreground">AI Investigation Decision Support</p>
+        <p className="text-sm font-semibold text-foreground">AI Recommendation</p>
         <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">AI-Powered</span>
       </div>
       <p className="text-xs text-muted-foreground">
-        Paste the evidence and interview findings from a completed investigation. The tool maps findings to exact source lines,
-        keeps contradictory evidence visible, assesses risk, weighs discipline factors individually, and gives a reviewable
-        range of possible corrective actions instead of mechanically turning a risk score into punishment.
+        Paste what your investigation found. The AI recommends a defensible finding and corrective-action range while showing
+        the actual evidence, contradictory evidence, and the reasoning it used so you can decide whether you agree.
       </p>
 
       <div className="rounded-lg border border-border overflow-hidden">
@@ -133,20 +132,20 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
           className="w-full flex items-center gap-2 px-3.5 py-2.5 text-left hover:bg-muted/30 transition-colors"
         >
           <Building2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-          <span className="text-xs font-medium text-foreground flex-1">Organization-specific discipline matrix (optional but strongly recommended)</span>
+          <span className="text-xs font-medium text-foreground flex-1">Optional policy / discipline context</span>
           <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform", showOrgContext && "rotate-180")} />
         </button>
         {showOrgContext && (
           <div className="border-t border-border p-3 bg-muted/10 space-y-2">
             <OrganizationDisciplineMatrix config={organizationConfig} onChange={setOrganizationConfig} maxCharacters={MAX_ORG_CONTEXT} />
-            <p className="text-[10px] text-muted-foreground text-right">Serialized decision context: {organizationContext.length.toLocaleString()} / {MAX_ORG_CONTEXT.toLocaleString()}</p>
+            <p className="text-[10px] text-muted-foreground text-right">Optional decision context: {organizationContext.length.toLocaleString()} / {MAX_ORG_CONTEXT.toLocaleString()}</p>
           </div>
         )}
       </div>
 
       <Button onClick={analyze} disabled={isAnalyzing || !caseFacts.trim()} className="w-full sm:w-auto">
         {isAnalyzing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Gavel className="w-4 h-4 mr-2" />}
-        {isAnalyzing ? "Mapping evidence…" : "Analyze Evidence & Options"}
+        {isAnalyzing ? "Analyzing evidence…" : "Get Recommendation"}
       </Button>
 
       {result && (
@@ -189,7 +188,7 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
       )}
 
       <p className="text-[10px] text-muted-foreground">
-        AI-organized evidence and decision support only. A qualified human reviewer must verify the source excerpts, apply organization policy and precedent, and involve HR/Legal before serious employment action.
+        AI recommendation and evidence analysis only. Verify the source excerpts and apply your actual policy, precedent, and HR/Legal review before serious employment action.
       </p>
     </div>
   );
