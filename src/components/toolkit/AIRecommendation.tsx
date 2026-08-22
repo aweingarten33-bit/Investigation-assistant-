@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Sparkles, Gavel, Loader2, Mail, AlertTriangle, ShieldAlert,
   ChevronDown, Building2,
@@ -9,8 +9,14 @@ import { toast } from "sonner";
 import { callApi } from "@/lib/api";
 import { ClassificationSummary, Classification } from "@/components/ClassificationSummary";
 import { EvidenceTraceability } from "@/components/EvidenceTraceability";
+import { OrganizationDisciplineMatrix } from "@/components/OrganizationDisciplineMatrix";
 import { NotifyChecklist } from "@/components/NotifyChecklist";
 import { suggestLetterType, buildLetterPrefillFromClassification, letterButtonLabel } from "@/lib/letter-prefill";
+import {
+  buildOrganizationContext,
+  EMPTY_ORGANIZATION_DISCIPLINE_CONFIG,
+  type OrganizationDisciplineConfig,
+} from "@/lib/organization-context";
 import { cn } from "@/lib/utils";
 import { Source } from "@/lib/types";
 
@@ -28,12 +34,14 @@ interface AIRecommendationProps {
 
 export default function AIRecommendation({ onDraftLetter }: AIRecommendationProps) {
   const [caseFacts, setCaseFacts] = useState("");
-  const [organizationContext, setOrganizationContext] = useState("");
+  const [organizationConfig, setOrganizationConfig] = useState<OrganizationDisciplineConfig>({ ...EMPTY_ORGANIZATION_DISCIPLINE_CONFIG });
   const [result, setResult] = useState<ClassifyResponse | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showGovernance, setShowGovernance] = useState(false);
   const [showOrgContext, setShowOrgContext] = useState(false);
+
+  const organizationContext = useMemo(() => buildOrganizationContext(organizationConfig), [organizationConfig]);
 
   const analyze = async () => {
     const trimmed = caseFacts.trim();
@@ -50,7 +58,7 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
       return;
     }
     if (organizationContext.length > MAX_ORG_CONTEXT) {
-      toast.error("Organization context must be under 20,000 characters.");
+      toast.error("Organization discipline context must be under 20,000 characters.");
       return;
     }
 
@@ -102,7 +110,7 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
           <div className="border-t border-border px-3.5 py-3 bg-muted/20">
             <ul className="space-y-1.5 text-[11px] text-foreground/80">
               <li>• <strong className="text-foreground">Meaningful human review is mandatory for this workflow.</strong> Treat the output as evidence organization and decision support, not the decision itself.</li>
-              <li>• <strong className="text-foreground">Illinois employment AI rules effective January 1, 2026 cover discipline and require employee notice in circumstances governed by the statute/rules.</strong> Verify the notice rules that apply to your use case.</li>
+              <li>• <strong className="text-foreground">Illinois employment AI rules effective January 1, 2026 cover discipline and include employee-notice requirements.</strong> Verify the circumstances, timing, and means of notice under the law and implementing rules that apply to your use.</li>
               <li>• <strong className="text-foreground">NYC Local Law 144 is narrower than a general discipline rule:</strong> its defined employment decision covers screening candidates for employment or employees for promotion. Other anti-discrimination laws can still apply to AI-assisted discipline.</li>
               <li>• <strong className="text-foreground">Do not use protected characteristics as discipline factors.</strong> Periodically test outcomes for disparate-impact patterns and document human overrides/review.</li>
               <li>• <strong className="text-foreground">Organization policy controls.</strong> Past practice, HR rules, CBA obligations, prior discipline, training, role expectations, and legal review can change the appropriate outcome even when the underlying facts are identical.</li>
@@ -125,22 +133,13 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
           className="w-full flex items-center gap-2 px-3.5 py-2.5 text-left hover:bg-muted/30 transition-colors"
         >
           <Building2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-          <span className="text-xs font-medium text-foreground flex-1">Organization-specific discipline rules (optional but strongly recommended)</span>
+          <span className="text-xs font-medium text-foreground flex-1">Organization-specific discipline matrix (optional but strongly recommended)</span>
           <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform", showOrgContext && "rotate-180")} />
         </button>
         {showOrgContext && (
           <div className="border-t border-border p-3 bg-muted/10 space-y-2">
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Paste relevant policy language, your disciplinary matrix, anonymized precedent examples, CBA/union constraints,
-              HR escalation rules, or required approval levels. This context is used as decision criteria only and is never treated as case evidence.
-            </p>
-            <Textarea
-              value={organizationContext}
-              onChange={(e) => setOrganizationContext(e.target.value)}
-              placeholder={'Example:\n- First intentional privacy snooping event: HR + Privacy Officer review required; action range final warning through termination.\n- CBA requires progressive discipline unless conduct meets listed serious-misconduct exceptions.\n- Similar anonymized precedent: …'}
-              className="min-h-[130px] text-xs"
-            />
-            <p className="text-[10px] text-muted-foreground text-right">{organizationContext.length.toLocaleString()} / {MAX_ORG_CONTEXT.toLocaleString()}</p>
+            <OrganizationDisciplineMatrix config={organizationConfig} onChange={setOrganizationConfig} maxCharacters={MAX_ORG_CONTEXT} />
+            <p className="text-[10px] text-muted-foreground text-right">Serialized decision context: {organizationContext.length.toLocaleString()} / {MAX_ORG_CONTEXT.toLocaleString()}</p>
           </div>
         )}
       </div>
