@@ -27,6 +27,7 @@ import { HomeToolkitMenuButton } from "@/components/ToolkitMenu";
 const MIN_REPORT_LENGTH = 50;
 const MAX_REPORT_LENGTH = 100_000;
 const MAX_ORG_CONTEXT = 20_000;
+const ANALYSIS_VERSION = "investigation-workbench-v2";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -151,6 +152,7 @@ const Index = () => {
         signature: string;
         inputHash: string;
         sources?: AnalysisResult["sources"];
+        researchTopic?: string | null;
       }>(
         "analyze-report",
         {
@@ -167,6 +169,7 @@ const Index = () => {
       const signature = classifyData!.signature;
       const inputHash = classifyData!.inputHash;
       const sources = classifyData!.sources;
+      const researchTopic = classifyData!.researchTopic ?? null;
       setAnalyzeStep(2);
 
       const { data: reportData, error: reportError } = await callApi<Omit<AnalysisResult, "caseId">>(
@@ -186,7 +189,20 @@ const Index = () => {
 
       const caseMatch = trimmedReportText.match(/Case\s*#?\s*([\w-]+)/i);
       const caseId = caseMatch ? caseMatch[1] : new Date().toISOString().split("T")[0];
-      setResult({ ...reportData!, caseId, sources });
+      setResult({
+        ...reportData!,
+        caseId,
+        sources,
+        analysisMetadata: {
+          analysisVersion: ANALYSIS_VERSION,
+          generatedAt: new Date().toISOString(),
+          sourceFingerprint: inputHash,
+          organizationContextApplied: Boolean(trimmedOrganizationContext),
+          researchTopic,
+          evidenceCount: reportData!.evidenceItems?.length ?? 0,
+          findingCount: reportData!.findings?.length ?? 0,
+        },
+      });
       toast.success("Evidence mapped and report generated.");
       setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 100);
     } catch (e: unknown) {
