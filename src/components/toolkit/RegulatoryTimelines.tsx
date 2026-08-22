@@ -1,368 +1,401 @@
 import { useState } from "react";
-import { Clock, AlertTriangle, ChevronDown, Scale, Shield, FileText, Gavel, Timer, Ban, Lightbulb, ExternalLink, type LucideIcon } from "lucide-react";
+import {
+  Clock, AlertTriangle, ChevronDown, ExternalLink,
+  Shield, Building2, FileWarning, Landmark, ReceiptText, Files, Hospital, Pill,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  getRegulatorySource,
+  isRegulatorySourceStale,
+  type RegulatorySourceId,
+} from "@/lib/regulatory-sources";
 
-const QUICK_REF = [
-  { deadline: "2 HOURS", what: "Immediate jeopardy → State survey agency", color: "bg-red-600" },
-  { deadline: "24–72 HRS", what: "State adverse event reporting (varies by state)", color: "bg-red-500" },
-  { deadline: "60 DAYS", what: "HIPAA breach → notify individuals + HHS (if 500+)", color: "bg-red-500" },
-  { deadline: "60 DAYS", what: "Return identified Medicare/Medicaid overpayments", color: "bg-orange-500" },
-  { deadline: "30–45 DAYS", what: "Complete routine investigation (best practice)", color: "bg-amber-500" },
-  { deadline: "45 DAYS", what: "Joint Commission RCA due (sentinel events)", color: "bg-amber-500" },
-  { deadline: "ASAP", what: "OCR/OIG self-disclosure (no hard deadline, but sooner = better outcome)", color: "bg-blue-500" },
-];
-
-interface Deadline {
+type Deadline = {
   timeframe: string;
   title: string;
-  whatToDo: string[];
-  // Either a live deadline's consequence, or — for a proposed/not-yet-final
-  // rule — a status note. `pending: true` swaps the red "if you miss it"
-  // alert for a neutral "watch this" one so it doesn't read as a live deadline.
-  ifYouMiss: string;
-  pending?: boolean;
-  source: string;
-}
+  scope: string;
+  actions: string[];
+  sourceId: RegulatorySourceId;
+  proposed?: boolean;
+};
 
-interface TimelineSection {
+type Section = {
   id: string;
   title: string;
-  icon: LucideIcon;
-  color: string;
-  accent: string;
+  description: string;
+  icon: typeof Clock;
   deadlines: Deadline[];
-}
+};
 
-const TIMELINE_SECTIONS: TimelineSection[] = [
+const SECTIONS: Section[] = [
   {
-    id: "internal",
-    title: "Internal Investigation Deadlines",
-    icon: Clock,
-    color: "text-blue-600",
-    accent: "border-l-blue-500",
+    id: "hipaa",
+    title: "HIPAA & Part 2 Breach Notification",
+    description: "Federal breach-notification clocks. Track discovery immediately; do not wait for the investigation to close before calendaring notice obligations.",
+    icon: Shield,
     deadlines: [
       {
-        timeframe: "Day 0 (Immediately)",
-        title: "Log the complaint",
-        whatToDo: [
-          "Document the complaint in your tracking system — same day",
-          "Acknowledge receipt to the reporter (if not anonymous) within 24 hours",
-          "Issue a document preservation hold immediately",
+        timeframe: "Without unreasonable delay; no later than 60 calendar days",
+        title: "HIPAA — notify affected individuals",
+        scope: "Covered entity — breach of unsecured PHI",
+        actions: [
+          "The clock runs from discovery of the breach, not completion of the investigation.",
+          "The 60 days is an outer limit, not a 60-day waiting period.",
+          "Complete the breach-risk analysis promptly enough to meet the notice clock and document the basis for notification or non-notification.",
         ],
-        ifYouMiss: "Regulators examine response speed when evaluating your compliance program. Delayed response is an aggravating factor in settlements.",
-        source: "OIG General Compliance Program Guidance (2023), Element 7",
+        sourceId: "hipaa_individual_notice",
       },
       {
-        timeframe: "Within 48 Hours",
-        title: "Assess and assign",
-        whatToDo: [
-          "Decide if this needs a formal investigation",
-          "Set priority level (high/medium/low)",
-          "Check for conflicts of interest",
-          "Decide if legal counsel is needed",
-          "Assign an investigator",
-          "HIGH-RISK matters (PHI exposure, patient safety) → start within 24 hours",
+        timeframe: "Without unreasonable delay; no later than 60 calendar days",
+        title: "HIPAA — notify HHS for 500+ affected individuals",
+        scope: "Covered entity — breach affecting 500 or more individuals",
+        actions: [
+          "Submit notice to the Secretary through the HHS breach portal.",
+          "If more than 500 residents of a State or jurisdiction are affected, media notice is also required within the same outer timeframe.",
+          "Use an estimate if the final affected-person count is not yet known; HHS permits addenda to update a prior report.",
         ],
-        ifYouMiss: "Every day of delay = ongoing exposure, destroyed evidence, and coordinated stories.",
-        source: "HCCA Compliance Essentials; OIG GCPG",
+        sourceId: "hipaa_secretary_notice",
       },
       {
-        timeframe: "30–45 Days",
-        title: "Complete the investigation",
-        whatToDo: [
-          "Routine matters: 30 days",
-          "Complex matters: 45–60 days",
-          "Highly complex (multi-department, large-scale exposure): up to 90 days",
-          "If going past 90 days → document WHY and put interim protections in place",
-          "Target: preliminary findings by day 14, interviews done by day 30, report by day 45",
+        timeframe: "No later than 60 days after the end of the calendar year",
+        title: "HIPAA — notify HHS for fewer than 500 affected individuals",
+        scope: "Covered entity — breach affecting fewer than 500 individuals",
+        actions: [
+          "Smaller breaches may be reported to HHS on an annual basis.",
+          "You may report earlier; the annual HHS timing does not extend the separate individual-notification deadline.",
         ],
-        ifYouMiss: "Extended investigations without documented justification read as an ineffective compliance program to regulators.",
-        source: "HCCA Compliance Essentials; OIG GCPG",
+        sourceId: "hipaa_secretary_notice",
       },
       {
-        timeframe: "Ongoing",
-        title: "Interim protective measures",
-        whatToDo: [
-          "🔴 Active patient harm → corrective action SAME DAY",
-          "🔴 Active HIPAA breach → contain it, stop unauthorized access, revoke access if needed",
-          "🟡 Employee safety risk → consider admin leave or reassignment",
-          "Don't wait for the report to act on known harm",
+        timeframe: "Without unreasonable delay; no later than 60 calendar days",
+        title: "HIPAA — business associate notifies covered entity",
+        scope: "Business associate — breach of unsecured PHI",
+        actions: [
+          "Notify the covered entity following discovery of the breach.",
+          "Check the BAA: contractual notice may be much shorter than the federal 60-day outer limit.",
+          "Provide affected-individual information and other available notice information required by §164.410.",
         ],
-        ifYouMiss: "Additional violations, increased exposure, and potential liability for harm you knew about and didn't stop.",
-        source: "OIG GCPG (2023); CMS Conditions of Participation",
+        sourceId: "hipaa_business_associate_notice",
+      },
+      {
+        timeframe: "HIPAA-style breach clocks apply as of February 16, 2026",
+        title: "42 CFR Part 2 — breach of unsecured Part 2 records",
+        scope: "Part 2 program — SUD patient records",
+        actions: [
+          "Part 2 programs now have breach-notification duties aligned with the HIPAA Breach Notification Rule.",
+          "For 500+ affected patients: notify HHS without unreasonable delay and no later than 60 calendar days after discovery; fewer than 500 may be reported within 60 days after the end of the calendar year.",
+          "Affected-patient and, where applicable, media notice obligations also apply. Use the HHS Part 2 breach portal/process.",
+        ],
+        sourceId: "part2_breach_notification",
       },
     ],
   },
   {
-    id: "hipaa",
-    title: "HIPAA Breach Deadlines",
-    icon: Shield,
-    color: "text-rose-600",
-    accent: "border-l-rose-500",
+    id: "hospital",
+    title: "Hospital-Specific Reporting",
+    description: "High-value clocks that can arise inside hospitals. These are separate from HIPAA breach timing and from nursing-home rules.",
+    icon: Hospital,
     deadlines: [
       {
-        timeframe: "60 Calendar Days",
-        title: "Notify affected individuals",
-        whatToDo: [
-          "Clock starts when breach is DISCOVERED (not when investigation is complete)",
-          "'Discovered' = when anyone in the org knew or should have known",
-          "Send written notification by first-class mail",
-          "Include: what happened, what info was involved, what they should do, what you're doing, contact info",
-          "500+ people affected → also notify 'prominent media outlets' in the state",
+        timeframe: "Within 24 hours or one business day",
+        title: "New York Article 28 adverse event — NYPORTS",
+        scope: "N.Y. PHL §2805-l; 10 NYCRR §405.8 / §751.10",
+        actions: [
+          "Assess immediately whether the event falls within a NYPORTS reportable category; do not wait for the root-cause investigation to finish.",
+          "Designated Article 28 hospital/D&TC staff submit the initial adverse-event report through NYPORTS/HCS.",
+          "Preserve the clinical record, event details, staffing/assignment information, device/medication data, and other evidence needed for the follow-up investigation/root-cause analysis when required.",
         ],
-        ifYouMiss: "Penalties range $100–$50,000 per violation; willful neglect is $50,000 per violation with an annual cap around $2M. Late notification is treated as an aggravating factor in settlements.",
-        source: "45 CFR §164.404; HITECH Act §13402",
+        sourceId: "nyports_hospital_adverse_events",
       },
       {
-        timeframe: "60 Calendar Days",
-        title: "Notify HHS/OCR (if 500+ people)",
-        whatToDo: [
-          "Report via HHS Breach Portal: ocrportal.hhs.gov",
-          "Concurrent with individual notification",
-          "This goes on the public breach portal — searchable by anyone",
+        timeframe: "Within 30 days of the statutory trigger",
+        title: "New York hospital — possible professional misconduct",
+        scope: "N.Y. Public Health Law §2803-e",
+        actions: [
+          "Covered Article 28 hospitals/facilities must report specified suspensions, restrictions, terminations, privilege actions, certain resignations/withdrawals, convictions, and information reasonably appearing to show physician professional misconduct within the statute's 30-day timeframe.",
+          "The recipient depends on the professional license: reports generally go to the Education Department, except physicians, physician assistants, and specialist assistants are reported to the Department of Health.",
+          "Calendar the reporting trigger separately from the completion of the internal peer-review, HR, compliance, or credentialing process.",
         ],
-        ifYouMiss: "Multi-million dollar settlements have followed large breaches with delayed or incomplete notification.",
-        source: "45 CFR §164.408",
+        sourceId: "ny_hospital_professional_misconduct",
       },
       {
-        timeframe: "60 Days After Year-End",
-        title: "Notify HHS/OCR (if under 500 people)",
-        whatToDo: [
-          "Small breaches can be batched annually",
-          "Due 60 days after Dec 31 of the year the breach was discovered",
-          "Individual notification is still due within 60 days of discovery — this is just the HHS report",
+        timeframe: "Within 72 hours of the occurrence",
+        title: "EMTALA — recipient hospital suspects an improper unstable transfer",
+        scope: "42 CFR §489.20(m); CMS Appendix V guidance",
+        actions: [
+          "A recipient hospital that suspects it received an individual improperly transferred while unstable should report the incident to CMS or the State Survey Agency within 72 hours.",
+          "Preserve the ED log, MSE/stabilization record, transfer documents, acceptance/refusal communications, transfer-center recordings, on-call roster, and capacity information.",
+          "The reporting obligation is distinct from the final EMTALA merits determination.",
         ],
-        ifYouMiss: "OCR tracks patterns. Multiple small breaches invite a compliance review.",
-        source: "45 CFR §164.408(c)",
+        sourceId: "emtala_recipient_hospital_reporting",
+      },
+    ],
+  },
+  {
+    id: "controlled-substances",
+    title: "Controlled Substances / Diversion",
+    description: "Hospital and pharmacy investigations can trigger federal DEA reporting before individual responsibility has been established.",
+    icon: Pill,
+    deadlines: [
+      {
+        timeframe: "Written notice to DEA within one business day of discovery",
+        title: "Theft or significant loss of controlled substances",
+        scope: "21 CFR §1301.74(c); DEA registrants",
+        actions: [
+          "A DEA registrant must notify the local DEA Field Division Office in writing within one business day after discovery of a theft or significant loss.",
+          "DEA must be notified directly; an internal corporate/security report does not substitute for direct DEA notice.",
+          "Document the theft/loss using DEA Form 106 and assess state pharmacy/law-enforcement/professional-reporting duties separately.",
+          "A medication discrepancy is not automatically a 'significant loss' or proof of diversion by a particular employee; investigate both the regulatory reporting question and individual responsibility.",
+        ],
+        sourceId: "dea_theft_significant_loss",
+      },
+    ],
+  },
+  {
+    id: "ny-privacy",
+    title: "New York Privacy / Data Breach",
+    description: "New York requirements can run alongside HIPAA. Determine whether the incident involves New York residents and 'private information' under GBL §899-aa.",
+    icon: Landmark,
+    deadlines: [
+      {
+        timeframe: "Most expedient time possible; no later than 30 days",
+        title: "Notify affected New York residents",
+        scope: "N.Y. General Business Law §899-aa — covered private information",
+        actions: [
+          "The current statute imposes a 30-day outer limit after discovery, subject to the law-enforcement delay provision.",
+          "If New York residents are being notified, the Attorney General, Department of State, State Police, and—when applicable—Department of Financial Services also receive the required state notice information without delaying resident notice.",
+          "Do not assume every HIPAA event is automatically a §899-aa breach; analyze the statutory definitions and any HIPAA-specific state reporting provision.",
+        ],
+        sourceId: "ny_data_breach_899aa",
       },
       {
-        timeframe: "60 Calendar Days",
-        title: "Business Associate → Covered Entity notification",
-        whatToDo: [
-          "Your BAA probably says faster (24–72 hours) — check it",
-          "BA must include: affected individuals (if known) + info the CE needs",
-          "The CE's clock starts when the BA discovers it — not when the BA tells you",
+        timeframe: "Within 5 business days after notifying HHS",
+        title: "HIPAA/HITECH breach notice to New York Attorney General",
+        scope: "N.Y. GBL §899-aa(9)",
+        actions: [
+          "A covered entity required to notify HHS of a HIPAA/HITECH breach must provide notice to the New York Attorney General within five business days after notifying HHS.",
+          "This subsection applies even when the breached information is not 'private information' under the narrower New York definition.",
         ],
-        ifYouMiss: "The CE's responsibility doesn't wait for the BA. If your BA knew, your clock started.",
-        source: "45 CFR §164.410",
+        sourceId: "ny_data_breach_899aa",
+      },
+    ],
+  },
+  {
+    id: "ltc",
+    title: "Long-Term Care: Federal & New York Reporting",
+    description: "Keep the separate federal facility-reporting, suspected-crime, and New York mandated-reporter duties straight. They can overlap on the same event.",
+    icon: Building2,
+    deadlines: [
+      {
+        timeframe: "Immediately, but no later than 2 hours",
+        title: "Federal LTC alleged violation — abuse or serious bodily injury",
+        scope: "42 CFR §483.12(c)(1) / F609",
+        actions: [
+          "Report covered alleged violations to the facility administrator and required officials, including the State Survey Agency as applicable.",
+          "The 2-hour timeframe applies when the alleged violation involves abuse or results in serious bodily injury.",
+          "Protect the resident and preserve evidence immediately; do not delay reporting while deciding whether the allegation is credible or substantiated.",
+        ],
+        sourceId: "cms_ltc_alleged_violations",
       },
       {
-        timeframe: "Proposed — Not Yet Final",
-        title: "Watch: HHS notification may shorten to 72 hours",
-        whatToDo: [
-          "A 2024 HHS proposed rule (NPRM) would cut the HHS notification window from 60 days to 72 hours after discovery",
-          "This would apply to notifying HHS — individual notification would likely stay at 60 days",
-          "Not finalized as of mid-2026; a final rule isn't expected until late 2026 or 2027 at the earliest",
+        timeframe: "No later than 24 hours",
+        title: "Federal LTC alleged violation — no abuse and no serious bodily injury",
+        scope: "42 CFR §483.12(c)(1) / F609",
+        actions: [
+          "For covered alleged neglect, exploitation, mistreatment, injuries of unknown source, or misappropriation that does not involve abuse and does not result in serious bodily injury, the federal outer timeframe is 24 hours.",
+          "State law can add a different or additional reporting duty.",
         ],
-        ifYouMiss: "Not yet in effect — this is a heads-up, not a current deadline. Don't build your process around 72 hours yet, but don't assume 60 days is permanent either.",
-        pending: true,
-        source: "HHS NPRM (2024), not yet finalized — check HHS.gov for status",
+        sourceId: "cms_ltc_alleged_violations",
+      },
+      {
+        timeframe: "Within 5 working days of the incident",
+        title: "Federal LTC — report investigation results",
+        scope: "42 CFR §483.12(c)(4) / F609",
+        actions: [
+          "Report the results of all covered investigations to the administrator/designee and other officials required by State law, including the State Survey Agency.",
+          "If the alleged violation is verified, appropriate corrective action must be taken.",
+          "This 5-working-day requirement is separate from the initial 2-hour/24-hour report.",
+        ],
+        sourceId: "cms_ltc_alleged_violations",
+      },
+      {
+        timeframe: "2 hours if serious bodily injury; otherwise 24 hours",
+        title: "Federal LTC — reasonable suspicion of a crime",
+        scope: "42 CFR §483.12(b)(5); Social Security Act §1150B",
+        actions: [
+          "A covered individual who forms a reasonable suspicion of a crime against a resident or person receiving care has an independent reporting obligation to the State Agency and one or more local law-enforcement entities.",
+          "If the events causing the suspicion result in serious bodily injury: immediately, but no later than 2 hours after forming the suspicion; otherwise no later than 24 hours.",
+          "Do not confuse this suspected-crime duty with the facility's separate F609 alleged-violation reporting duty.",
+        ],
+        sourceId: "cms_ltc_suspected_crime",
+      },
+      {
+        timeframe: "Immediately by telephone; in writing within 48 hours",
+        title: "New York residential health care facility abuse reporting",
+        scope: "N.Y. Public Health Law §2803-d(3)",
+        actions: [
+          "New York mandated reporters with reasonable cause to believe a resident was abused, mistreated, neglected, or subjected to misappropriation of property must report to NYSDOH immediately by telephone and in writing within 48 hours.",
+          "This is a State-law duty that can overlap with the federal 2-hour/24-hour LTC reporting rules.",
+          "Do not wait for the facility investigation to determine individual culpability before making a report that the statute requires on reasonable cause.",
+        ],
+        sourceId: "ny_phl_2803d",
       },
     ],
   },
   {
     id: "overpayment",
-    title: "Overpayment / False Claims Act",
-    icon: Gavel,
-    color: "text-purple-600",
-    accent: "border-l-purple-500",
+    title: "Medicare Parts A & B Overpayments",
+    description: "Current §401.305 timing changed effective January 1, 2025. The 180-day provision is a suspension mechanism for related-overpayment investigations, not a blanket six-month period before the 60-day clock starts.",
+    icon: ReceiptText,
     deadlines: [
       {
-        timeframe: "60 Calendar Days",
-        title: "Report and return identified overpayments",
-        whatToDo: [
-          "Once you've identified an overpayment from Medicare/Medicaid → 60 days to report AND return it",
-          "'Identified' = you know or should know through reasonable diligence",
-          "You get up to 6 months to investigate and quantify → then the 60-day clock starts",
-          "Total max: ~8 months from first notice of potential overpayment",
+        timeframe: "Generally 60 days after identification",
+        title: "Report and return an identified Medicare Parts A/B overpayment",
+        scope: "42 CFR §401.305",
+        actions: [
+          "Report and return by the later of 60 days after identification or the date a corresponding cost report is due, if applicable.",
+          "Identification uses the current regulatory standard tied to actual knowledge, deliberate ignorance, or reckless disregard; do not rely on the old 'reasonable diligence plus quantification' formulation.",
+          "If the overpayment appears isolated and no related-overpayment investigation is warranted, the ordinary 60-day clock applies.",
         ],
-        ifYouMiss: "Becomes a 'reverse false claim.' Penalties include treble damages plus per-claim penalties and possible exclusion.",
-        source: "42 USC §1320a-7k(d); False Claims Act 31 USC §3729",
+        sourceId: "medicare_overpayment_401305",
       },
       {
-        timeframe: "6 Years",
-        title: "Lookback period",
-        whatToDo: [
-          "If you find a billing problem, you must look back 6 years for the same issue",
-          "Only obligated to return 6 years' worth — but fix the underlying problem regardless",
+        timeframe: "60-day clock may be suspended for up to 180 days",
+        title: "Timely, good-faith investigation of related overpayments",
+        scope: "42 CFR §401.305(b)(3)",
+        actions: [
+          "After an overpayment is identified, if related overpayments may exist from the same or similar cause, a timely, good-faith investigation can suspend the 60-day deadline for up to 180 days.",
+          "The suspension ends when the investigation concludes and the aggregate amount is calculated, or at day 180, whichever comes first.",
+          "After the suspension ends, the unused remainder of the original 60-day period resumes. The rule does not create an automatic 180-day pre-identification investigation window.",
         ],
-        ifYouMiss: "The 6-year lookback can mean a large repayment obligation. This is why initial audit scope matters.",
-        source: "42 USC §1320a-7k(d)(3)",
+        sourceId: "medicare_overpayment_401305",
       },
     ],
   },
   {
-    id: "disclosure",
-    title: "Regulatory Self-Disclosure",
-    icon: FileText,
-    color: "text-indigo-600",
-    accent: "border-l-indigo-500",
+    id: "access",
+    title: "HIPAA Right of Access",
+    description: "A common OCR enforcement area. This clock is separate from investigation and breach-notification timelines.",
+    icon: Files,
     deadlines: [
       {
-        timeframe: "ASAP After Discovery",
-        title: "Submit self-disclosure",
-        whatToDo: [
-          "No exact deadline, but 'promptly' after completing your investigation",
-          "Best practice: within 60–90 days of completing your investigation",
-          "Must include: what happened, which programs/records, estimated scope, time period, corrective actions taken",
-          "Earlier is always more favorable.",
+        timeframe: "No later than 30 calendar days after receipt",
+        title: "Act on an individual's HIPAA access request",
+        scope: "45 CFR §164.524(b)(2)",
+        actions: [
+          "Thirty calendar days is the federal outer limit; HHS encourages access much sooner when feasible.",
+          "If the request cannot be completed within 30 days, one extension of no more than an additional 30 calendar days is permitted if the individual receives written notice within the initial 30 days stating the reason and expected completion date.",
+          "Only one extension is permitted per request; delays involving a business associate still consume the same clock.",
         ],
-        ifYouMiss: "Disclosing only after a regulator opens its own investigation results in far less favorable terms.",
-        source: "OIG Provider Self-Disclosure Protocol",
-      },
-      {
-        timeframe: "The Math",
-        title: "Self-disclosure vs. getting caught",
-        whatToDo: [
-          "SELF-DISCLOSURE: Reduced settlement multiplier, may avoid exclusion",
-          "REGULATOR DISCOVERS IT: Treble damages + per-claim penalties + possible exclusion + possible criminal referral",
-          "Organizations that self-disclose promptly consistently get better outcomes.",
-        ],
-        ifYouMiss: "This is publicly stated regulator policy — the incentive to self-disclose is real and material.",
-        source: "OIG Self-Disclosure Protocol; OIG Semi-Annual Reports",
+        sourceId: "hipaa_right_of_access",
       },
     ],
   },
   {
-    id: "extensions",
-    title: "When You Need More Time",
-    icon: Timer,
-    color: "text-amber-600",
-    accent: "border-l-amber-500",
+    id: "security-nprm",
+    title: "HIPAA Security Rule NPRM Watch",
+    description: "Proposed cybersecurity changes are deliberately separated from current law so a proposal cannot be mistaken for an enforceable deadline.",
+    icon: FileWarning,
     deadlines: [
       {
-        timeframe: "Know This",
-        title: "Which deadlines are flexible vs. hard",
-        whatToDo: [
-          "🔴 NO EXTENSION: HIPAA breach (60 days), immediate jeopardy (2 hours)",
-          "🟡 SOME FLEXIBILITY: Overpayment return (6 months to investigate + 60 days)",
-          "🟢 FLEXIBLE: Self-disclosure (request extensions in writing, give a specific date)",
-          "If law enforcement asks you to delay HIPAA notification → up to 30 days (document it meticulously)",
+        timeframe: "PROPOSED — not a current breach-notification deadline",
+        title: "72-hour restoration-procedure proposal",
+        scope: "HIPAA Security Rule NPRM",
+        actions: [
+          "The proposal would require written procedures to restore the loss of certain relevant electronic information systems and data within 72 hours.",
+          "This is not a proposal to change HIPAA breach notification from 60 days to 72 hours.",
+          "HHS's current 2026 Security Rule materials still identify this as a proposed rule and state that the current Security Rule remains in effect.",
         ],
-        ifYouMiss: "An on-time partial report shows good faith. A late complete report shows disregard for the law. When in doubt, file what you have and supplement later.",
-        source: "45 CFR §164.412; 42 USC §1320a-7k(d); OIG Protocol",
+        sourceId: "hipaa_security_nprm_2024",
+        proposed: true,
       },
+    ],
+  },
+  {
+    id: "internal",
+    title: "Internal Investigation Targets",
+    description: "Internal service levels are useful, but do not turn them into fake legal deadlines. Regulatory, payer, contractual, accreditor, and preservation duties control when applicable.",
+    icon: Clock,
+    deadlines: [
       {
-        timeframe: "Overwhelmed?",
-        title: "How to triage multiple deadlines",
-        whatToDo: [
-          "PRIORITY 1: HIPAA 60-day, overpayment 60-day, state mandatory reporting, immediate jeopardy 2-hour",
-          "PRIORITY 2: Regulatory self-disclosure, accreditor reporting, state AG notification",
-          "PRIORITY 3: Internal investigation targets, board reporting, corrective action implementation",
-          "Never sacrifice a legal deadline to meet an internal one",
+        timeframe: "Set by your organization",
+        title: "Triage, preservation, interviews, report, and corrective-action targets",
+        scope: "Internal governance target — not a universal federal deadline",
+        actions: [
+          "Set documented target times based on risk and matter type rather than using one completion deadline for every case.",
+          "Escalate immediate patient/resident safety, evidence-preservation, access-control, reporting, or retaliation risks without waiting for a final report.",
+          "If an investigation exceeds its target, document why, what remains open, and any interim protections.",
+          "OIG's compliance guidance supports prompt response and corrective action but does not create a universal 30-, 60-, or 90-day investigation-completion rule.",
         ],
-        ifYouMiss: "Knowing which deadlines are non-negotiable vs. flexible is what separates a defensible compliance program from one that ends up in a settlement.",
-        source: "Practical compliance operations guidance; HCCA",
+        sourceId: "oig_gcpg",
       },
     ],
   },
 ];
 
 export default function RegulatoryTimelines() {
-  const [expandedSection, setExpandedSection] = useState<string | null>("hipaa");
+  const [open, setOpen] = useState<Record<string, boolean>>({
+    hipaa: true,
+    hospital: true,
+    "controlled-substances": false,
+    "ny-privacy": false,
+    ltc: true,
+    overpayment: false,
+    access: false,
+    "security-nprm": false,
+    internal: false,
+  });
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 mb-1">
-        <Timer className="w-5 h-5 text-primary" />
-        <h2 className="text-lg font-bold text-foreground">Regulatory Deadlines</h2>
+    <div className="max-w-4xl mx-auto space-y-4">
+      <div>
+        <div className="flex items-center gap-2 mb-1"><Clock className="w-5 h-5 text-primary" /><h2 className="text-lg font-bold text-foreground">Regulatory Deadlines & Timing Reference</h2></div>
+        <p className="text-xs text-muted-foreground">Current federal + New York timing most useful in hospital, privacy, billing, controlled-substance, and LTC investigations. Every rule links to a governed source record with jurisdiction, status, verification date, and version history.</p>
       </div>
-      <p className="text-xs text-muted-foreground -mt-3">When things are due and what happens if you miss them.</p>
 
-      <div className="rounded-xl border border-border bg-card p-4">
-        <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-3">⚡ Quick Reference — Key Deadlines</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {QUICK_REF.map((item, i) => (
-            <div key={i} className="flex items-center gap-2.5 text-xs">
-              <span className={cn("px-2 py-0.5 rounded text-white text-[10px] font-bold shrink-0 min-w-[72px] text-center", item.color)}>
-                {item.deadline}
-              </span>
-              <span className="text-foreground/80">{item.what}</span>
-            </div>
-          ))}
+      <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/5 p-4">
+        <AlertTriangle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
+        <div className="text-xs text-foreground leading-relaxed space-y-1">
+          <p><strong>Calendar the deadline when the triggering fact occurs—don't wait for the investigation to finish.</strong></p>
+          <p>One event can trigger several clocks at once. Always check facility type, jurisdiction, payer/program, contracts/BAAs, accreditation rules, and the exact facts. When two rules apply, satisfy the earliest applicable obligation unless counsel/regulator guidance establishes otherwise.</p>
         </div>
       </div>
 
-      <div className="flex items-start gap-2.5 px-4 py-3 bg-destructive/10 border border-destructive/30 rounded-lg">
-        <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
-        <p className="text-xs text-foreground/90">
-          <strong>These are real legal deadlines.</strong> Federal deadlines (HIPAA, overpayments) generally have NO extensions. Always verify with legal counsel for your specific situation.
-        </p>
-      </div>
-
-      {TIMELINE_SECTIONS.map((section) => {
-        const isOpen = expandedSection === section.id;
+      {SECTIONS.map((section) => {
+        const Icon = section.icon;
+        const isOpen = !!open[section.id];
         return (
-          <div key={section.id} className={cn(
-            "rounded-lg border border-border overflow-hidden transition-shadow",
-            isOpen && "shadow-sm"
-          )}>
-            <button
-              onClick={() => setExpandedSection(isOpen ? null : section.id)}
-              className={cn(
-                "w-full flex items-center gap-3 p-3.5 hover:bg-secondary/20 transition-colors text-left border-l-[3px]",
-                isOpen ? section.accent : "border-l-transparent"
-              )}
-            >
-              <div className={cn(
-                "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
-                isOpen ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"
-              )}>
-                <section.icon className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-semibold text-foreground">{section.title}</h3>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {section.deadlines.length} deadline{section.deadlines.length !== 1 ? "s" : ""}
-                </p>
-              </div>
-              <ChevronDown className={cn(
-                "w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200",
-                !isOpen && "-rotate-90"
-              )} />
+          <div key={section.id} className="rounded-xl border border-border bg-card overflow-hidden">
+            <button type="button" onClick={() => setOpen((current) => ({ ...current, [section.id]: !isOpen }))} className="w-full p-4 flex items-start gap-3 text-left hover:bg-muted/20 transition-colors">
+              <Icon className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+              <div className="flex-1"><p className="text-sm font-semibold text-foreground">{section.title}</p><p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">{section.description}</p></div>
+              <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
             </button>
 
             {isOpen && (
-              <div className="border-t border-border divide-y divide-border/50">
-                {section.deadlines.map((d, i) => (
-                  <div key={i} className="px-4 py-3.5">
-                    <div className="flex items-start gap-2.5 mb-2">
-                      <span className={cn(
-                        "px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap rounded shrink-0",
-                        d.pending ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary"
-                      )}>
-                        {d.timeframe}
-                      </span>
-                      <p className="text-sm font-semibold text-foreground">{d.title}</p>
+              <div className="border-t border-border p-4 space-y-3">
+                {section.deadlines.map((deadline) => {
+                  const source = getRegulatorySource(deadline.sourceId);
+                  const stale = isRegulatorySourceStale(source);
+                  return (
+                    <div key={`${section.id}-${deadline.title}`} className={cn("rounded-lg border p-4", deadline.proposed ? "border-warning/30 bg-warning/5" : "border-border bg-background")}>
+                      <div className="flex flex-wrap gap-2 items-center mb-2">
+                        <span className={cn("text-[10px] uppercase tracking-wide font-bold px-2 py-1 rounded", deadline.proposed ? "bg-warning/15 text-warning" : "bg-primary/10 text-primary")}>{deadline.timeframe}</span>
+                        <span className="text-[10px] text-muted-foreground">{deadline.scope}</span>
+                        {stale && <span className="text-[10px] font-semibold text-warning">SOURCE RE-VERIFICATION DUE</span>}
+                      </div>
+                      <p className="text-sm font-semibold text-foreground mb-2">{deadline.title}</p>
+                      <ul className="space-y-1.5">{deadline.actions.map((action, index) => <li key={index} className="text-xs text-foreground flex gap-2"><span className="text-muted-foreground">•</span><span>{action}</span></li>)}</ul>
+
+                      <div className="mt-3 rounded-md border border-border/70 bg-muted/20 p-3 space-y-1">
+                        <a href={source.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-primary underline underline-offset-2 hover:text-primary/80">{source.authority} — {source.citation}<ExternalLink className="h-3 w-3" /></a>
+                        <p className="text-[10px] text-muted-foreground"><strong>Jurisdiction:</strong> {source.jurisdiction}</p>
+                        <p className="text-[10px] text-muted-foreground"><strong>Status:</strong> {source.status} · <strong>Effective:</strong> {source.effectiveDate ?? "No specific effective date / not yet effective"}</p>
+                        <p className="text-[10px] text-muted-foreground"><strong>Last verified:</strong> {source.lastVerified} · <strong>Registry version:</strong> {source.version}</p>
+                      </div>
                     </div>
-
-                    <ul className="space-y-1 mb-3 ml-1">
-                      {d.whatToDo.map((item, j) => (
-                        <li key={j} className="flex items-start gap-2 text-xs text-foreground/80">
-                          <span className="text-muted-foreground mt-0.5 shrink-0">•</span>
-                          <span>{item}</span>
-                        </li>
-                      ))}
-                    </ul>
-
-                    {d.pending ? (
-                      <div className="flex items-start gap-2 px-3 py-2 bg-muted/40 border border-border rounded-md mb-2">
-                        <Clock className="w-3 h-3 text-muted-foreground shrink-0 mt-0.5" />
-                        <p className="text-[11px] text-foreground/90"><strong>Status:</strong> {d.ifYouMiss}</p>
-                      </div>
-                    ) : (
-                      <div className="flex items-start gap-2 px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-md mb-2">
-                        <Ban className="w-3 h-3 text-destructive shrink-0 mt-0.5" />
-                        <p className="text-[11px] text-foreground/90"><strong>If you miss it:</strong> {d.ifYouMiss}</p>
-                      </div>
-                    )}
-
-                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                      <ExternalLink className="w-2.5 h-2.5" />
-                      {d.source}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

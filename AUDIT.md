@@ -1,240 +1,161 @@
-# Security & Code Audit — Investigation Assistant
+# Security, Privacy & Decision-Support Audit — Investigation Assistant
 
-_Audit date: 2026-06-02_
+_Last updated: 2026-08-22_
 
-This document records the findings of a multi-angle review of the application
-(React + Vite frontend, Node/Express backend, Claude API) and the fixes
-applied in the same change set. The backend originally ran on Supabase Edge
-Functions; see the 2026-08-21 addendum below for the migration off Supabase
-and why the findings below still apply unchanged to the Express port.
+## Current product scope
 
-## Architecture
+This repository is optimized as a **personal Compliance & Privacy Investigation Assistant** for a single experienced investigator using de-identified case material. The goal is fast, defensible analysis and report drafting without turning the app into a multi-user enterprise case-management system.
 
-1. User pastes or uploads (`.docx`) investigation notes (potential PHI/PII).
-2. Frontend calls this app's own API route, `POST /api/analyze-report`.
-3. The server calls Claude twice: **classify** → **generate report**.
-4. Results are rendered and exported to Word (`.docx`).
+The primary workflow is:
 
-## Findings & Fixes
+1. paste or upload de-identified investigation notes;
+2. map findings to exact source lines;
+3. surface supporting and contradictory evidence;
+4. assess substantiated / unsubstantiated / needs more information;
+5. separate compliance/regulatory risk from employment action;
+6. generate a structured investigative report;
+7. optionally generate practical investigator next steps; and
+8. optionally record the investigator's own final decision for export.
 
-Severity tiers: **Critical** = trust/integrity/cost; **High** = crash/UX-break;
-**Medium/Low** = robustness & resilience.
+## Evidence controls
 
-| # | Severity | Location | Issue | Fix |
-|---|----------|----------|-------|-----|
-| 1 | Critical | `supabase/functions/analyze-report/index.ts` | No auth or rate limiting — anyone with the bundled anon key could trigger unlimited paid Claude calls. | Added best-effort per-IP rate limiting (`20/min`). Documented that hard limits belong at the gateway/WAF. |
-| 2 | Critical | `index.ts` (report step) / `src/pages/Index.tsx` | The step-1 classification round-trips through the client into step 2 with no integrity binding; an attacker could forge `recommendationTier` (e.g. → `recommend_termination`). | Server now **HMAC-signs** the classification (`SHA-256`) and verifies the signature (constant-time) on step 2. The client passes the signature through. |
-| 3 | Critical | `index.ts` `buildReportPrompt` | Client-controlled classification fields were interpolated verbatim into the Claude **system prompt** (prompt injection). | Strict enum/type validation (`isValidClassificationShape`) + the HMAC check above reject adversarial payloads before prompt construction. |
-| 4 | High | `index.ts` `buildReportPrompt:117` | `.toUpperCase()` / `.replace()` / `.length` on unvalidated fields threw a `TypeError` → 500 with leaked error text. | Same shape validation returns a clean `400` before any field access. |
-| 5 | High | `src/pages/Index.tsx` analyze flow | Cancel-then-immediately-reanalyze race: the stale run's `finally` stomped the new run's loading state. | Replaced the boolean `abortRef` with a monotonic **run-id** counter; stale runs no-op. |
-| 6 | Medium | `index.ts` `getAllowedOrigin:14` | Unrecognized origins received a *real* allowed origin in `Access-Control-Allow-Origin`, breaking cache (`Vary`) semantics and giving false security. | Return `"null"` for unrecognized origins. |
-| 7 | Medium | `index.ts` request handling | Body size was validated **after** `req.json()` had already buffered the full body into memory. | Reject via `Content-Length` **before** parsing (`MAX_BODY_BYTES`). |
-| 8 | Medium | `src/lib/docx-export.ts` / `Index.tsx` `handleExport` | `Packer.toBlob()` failure was an unhandled rejection — no user feedback. | Wrapped export in `try/catch` with an error toast. |
-| 9 | Low | `src/integrations/supabase/client.ts` | Module-level `throw` on missing env vars escaped React error boundaries → blank white screen. | Replaced with a non-throwing `isSupabaseConfigured` flag + safe placeholders; the UI surfaces a handled error toast. |
-| 10 | Low | `src/components/UploadZone.tsx` | After **Clear**, the tab stayed stuck on "Upload" instead of returning to "Paste". | `fileName` is now the single decider; falls back to the paste tab otherwise. |
-| 11 | Low | `src/pages/Index.tsx` `handleFileSelect` | File validation checked only the `.docx` extension (a renamed payload passed). | Added a MIME-type guard as defense-in-depth. |
+- Submitted notes are converted to immutable numbered lines.
+- AI evidence items must reference those line numbers.
+- Displayed excerpts are reconstructed by the server from the original submitted notes.
+- Invalid, reversed, or out-of-range citations are removed rather than clamped to nearby real text.
+- Invented evidence IDs are removed from findings and discipline factors.
+- Evidence status is recalculated after validation.
+- Material contradictions remain visible.
+- Model-suggested source labels are shown only when the label can be verified near the cited source lines; otherwise the source falls back to `Investigation Notes`.
 
-## Configuration notes
+## Decision-support controls
 
-- `CLASSIFICATION_SIGNING_SECRET` (optional) — secret used to HMAC-sign the
-  classification. Falls back to `ANTHROPIC_API_KEY` if unset. Set a dedicated
-  secret in production.
-- ~~`ALLOWED_ORIGINS`~~ — removed in the 2026-08-21 migration below. The
-  frontend and API are now served from the same origin, so there's no CORS
-  surface to allowlist.
+- Risk level is not a disciplinary level.
+- Incident count does not mechanically determine discipline.
+- Corrective-action analysis considers intent, role expectations, sensitivity, harm, concealment, cooperation, prior discipline/training, policy, precedent, CBA/union constraints, leadership role, retaliation, personal benefit, fraud, patient safety, and regulatory reporting implications when evidence exists.
+- Missing organization-specific policy/precedent/history can force a policy-dependent result rather than an invented answer.
+- Serious actions remain subject to human/HR/Legal review.
 
-## Addendum: Investigation Toolkit (2026-08-21)
+## Personal investigator next-step planner
 
-Added `supabase/functions/investigation-toolkit/index.ts` for the AI Letter
-Generator and AI Case Analysis tools, following the same hardening pattern as
-`analyze-report`: origin allowlist (`ALLOWED_ORIGINS`), a `Vary: Origin` +
-`"null"`-for-unrecognized-origin CORS response, best-effort per-IP rate
-limiting (20/min, separate bucket from `analyze-report`), a hard request-body
-byte cap enforced while streaming (not just via `Content-Length`), POST-only,
-and strict input validation (letter type against a fixed enum, min/max length
-checks on free-text fields) before any field reaches the Claude prompt. No new
-secrets — reuses `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL`. Unlike
-`analyze-report`, this function has no multi-step state to sign (each call is
-a single, independent request), so there's no HMAC/integrity step to carry
-over. `analyze-report` itself was left untouched by this change.
+The optional planner is intentionally practical rather than report-like. It can identify:
 
-## Addendum: Removed the Supabase dependency (2026-08-21)
+- immediate preservation or escalation steps;
+- objective records/evidence to obtain;
+- people still worth interviewing;
+- specific unresolved interview questions;
+- contradictions that need resolution;
+- analysis checks before deciding;
+- process/corrective-action ideas; and
+- TEST → FIND → FIX → RETEST follow-up when a control/process issue exists.
 
-The app originally used Supabase for exactly one thing — hosting the two
-Edge Functions above as a way to call Anthropic without exposing the API key
-in the browser. It had no auth, no database, no storage; Supabase was purely
-a serverless-functions host, a byproduct of the original Lovable scaffold
-rather than a deliberate requirement. Replaced with a small Express server
-(`server/`) that serves both the built frontend and the two API routes from
-a single process/origin, deployed as one Render service.
+It is on-demand so the normal report flow remains fast and does not incur another provider call unless wanted.
 
-What changed, and why the findings above still hold:
+## Search/privacy boundary
 
-- **`supabase/functions/analyze-report/index.ts`** → `server/routes/analyze-report.js`.
-  Ported line-for-line: same classification/report prompts, same
-  `classificationSchema`/`reportSchema`, same HMAC signing and constant-time
-  verification (`node:crypto`'s Web Crypto `crypto.subtle` instead of Deno's —
-  same API), same `isValidClassificationShape` defense-in-depth, same
-  `MAX_REPORT_TEXT_LENGTH` (100,000 chars).
-- **`supabase/functions/investigation-toolkit/index.ts`** → `server/routes/investigation-toolkit.js`.
-  Same port: same `LETTER_TYPES` (now including `hr_referral`), same prompts,
-  same length bounds.
-- **Body-size cap**: Express's `express.json({ limit })` enforces the byte
-  cap while reading the request stream (via the `raw-body` package), not
-  just via a `Content-Length` header check — the same property the hand-
-  rolled `readBodyWithLimit` was providing in the Deno version. Limits are
-  unchanged (`MAX_BODY_BYTES` per route, same formula as before).
-- **Rate limiting**: same per-IP, in-memory, sliding-window logic
-  (`createRateLimiter`), but now running in a persistent Node process
-  instead of ephemeral, independently-scaled Deno edge instances. This
-  makes it a **stronger** guarantee than before, not a weaker one — see the
-  updated residual-risk note below.
-- **CORS**: eliminated, not hardened-and-kept. Same-origin means there's no
-  cross-origin request to allow or deny in the first place; `ALLOWED_ORIGINS`
-  is gone (see Configuration notes above).
-- **`ANTHROPIC_API_KEY`**: still server-only, never sent to or readable by
-  the browser. Same trust boundary as before, just a different process
-  holding it.
+Previous behavior sent raw case text into a search-enabled model call while relying on prompt instructions not to search identifiers. That was not a real privacy boundary.
 
-## Addendum: Multi-provider AI backend (2026-08-21)
+Current behavior:
 
-Added OpenAI and Gemini as selectable alternatives to Anthropic
-(`AI_PROVIDER=anthropic|openai|gemini`), motivated by a real outage: the
-account's Anthropic API access was unavailable, and there was no way to
-keep testing without a second provider to fall back to.
+1. Raw case text is sent only to a **non-search structured taxonomy-selection call**.
+2. That call may return only a fixed enum such as `hipaa_unauthorized_access`, `false_claims_billing`, `controlled_substance_diversion`, or `patient_safety`.
+3. The server maps the enum to a fixed string in `server/lib/research-taxonomy.js`.
+4. The search-enabled provider call receives only that **server-owned fixed string**.
+5. Free-text model output cannot become a search query through this path.
+6. Search output is background regulatory context, not case evidence.
 
-- `server/lib/{anthropic,openai,gemini}.js` each implement the same two-
-  function interface (`callStructured`, `callText`); `server/lib/ai.js`
-  dispatches to whichever is selected. Routes call the dispatcher only —
-  no provider-specific code left in `server/routes/*`.
-- Each provider module owns its own key/model config and validates it
-  independently (clear `HttpError` if missing) rather than the route
-  hardcoding a single `ANTHROPIC_API_KEY` check, which is what this
-  replaces.
-- **Deliberately no default model for OpenAI or Gemini.** The prior
-  `ANTHROPIC_MODEL` default (`claude-sonnet-4-6`) was a guessed value that
-  was never actually valid — it shipped silently broken until someone hit
-  it with a real key (see the earlier fix in this history). Repeating that
-  guess for two more providers was the obvious wrong move immediately
-  after diagnosing it; `OPENAI_MODEL`/`GEMINI_MODEL` are required with no
-  fallback, so a missing model fails loudly and immediately instead of
-  looking like a working configuration.
-- **Error messages from all three providers now reach the user directly**
-  (`"<Provider> error (<status>): <their message>"`), not just server
-  logs — the previous opaque `"AI analysis failed (400)"` was the actual
-  bottleneck in diagnosing the Anthropic outage that motivated this whole
-  change; multiplying that opacity across three providers would have made
-  the next failure worse, not better.
-- `CLASSIFICATION_SIGNING_SECRET`'s fallback chain now checks all three
-  provider keys, not just `ANTHROPIC_API_KEY` — previously, running with
-  only `OPENAI_API_KEY` or `GEMINI_API_KEY` set would have left the HMAC
-  signing key silently empty. A startup log now warns loudly if no secret
-  can be derived at all.
-- **Gemini confirmed against live traffic (same day, real account).** The
-  `describeError` path did exactly what it was built for: a live
-  `generateContent` call against a real key returned a 404 for
-  `gemini-2.5-flash` ("no longer available to new users"), and Google's
-  own error body — surfaced verbatim through this app's error handling,
-  not just server logs — named the replacement (`gemini-3.6-flash`)
-  directly. No debugging beyond reading the toast was needed. Updated the
-  `GEMINI_MODEL` example in README.md/.env.example accordingly.
-- **OpenAI still unverified against live traffic** — no working key
-  available to test with in the environment this was built in. Verified
-  instead: correct routing per `AI_PROVIDER`, correct missing-config
-  errors, and a live non-2xx response (a network-proxy rejection, not a
-  real OpenAI response) confirming the fetch/error-parsing path doesn't
-  crash end to end. The request/response shapes are implemented per
-  OpenAI's public docs but unexercised against a real account. Treat the
-  first real use of `openai` as the actual test — the error-surfacing
-  work proven out on the Gemini path above means a wrong `OPENAI_MODEL`
-  should be similarly self-diagnosing from the toast alone.
+This materially reduces exposure to the search subsystem but does **not** make the application appropriate for real PHI by itself; the underlying non-search AI provider still receives the submitted notes.
 
-## Addendum: Live web-search grounding for recommendations (2026-08-21)
+## Integrity/security controls
 
-Added a grounding pass before the classification step (`analyze-report.js`,
-`step: "classify"` — used by both the AI Recommendation tool and the full
-Report Generator) so the severity/discipline-tier determination is checked
-against current information instead of relying solely on the model's
-training-data recall. Motivated directly by the user asking, in effect,
-"is this recommendation based on Reddit?" — a fair question the app had no
-good answer to before this.
+- API keys remain server-side.
+- Structured AI output is validated with Zod.
+- Classification is HMAC-signed.
+- The signature binds to a SHA-256 hash of the exact notes plus optional organization context.
+- Changed notes/context require reclassification before report generation.
+- Signature comparison uses constant-time comparison.
+- Request size is bounded.
+- Rate limiting uses proxy-aware `req.ip` with stale bucket cleanup.
+- Client cancellation uses AbortController.
+- Letter and investigator-plan prompts treat case material as untrusted data and resist embedded prompt instructions.
 
-- `server/lib/{anthropic,gemini}.js` each add `callTextWithSearch`, using
-  the provider's native web-search tool (`web_search_20250305` for
-  Anthropic — the basic variant, chosen over `_20260209`'s dynamic
-  filtering since `ANTHROPIC_MODEL` is user-configured and not guaranteed
-  to support it; `google_search` for Gemini). Both return `{ text, sources }`
-  in a single request — these are server-side tools, no client-side loop.
-- `server/lib/openai.js` adds the same function but gated: OpenAI's Chat
-  Completions API (which this app uses) has no optional/toggleable
-  web-search tool for arbitrary models — search is instead baked into
-  specific `-search-preview` models that always search. If `OPENAI_MODEL`
-  isn't one of those, `callTextWithSearch` throws a clear `HttpError`
-  rather than silently returning an ungrounded result. True toggleable
-  search on any OpenAI model requires the separate Responses API — a
-  different request/response shape from Chat Completions — which is out of
-  scope here; see the comment in `openai.js`.
-- **The grounding search never sees case-identifying details on purpose.**
-  It's a separate `callTextWithSearch` call with its own prompt
-  (`RESEARCH_PROMPT`), scoped to "search on the violation type only, never
-  on names/employer/dates" and told explicitly to research general
-  regulatory/industry-practice background, not this specific case. This
-  matters because a search query is a different exposure surface than an
-  LLM inference call — it can hit the provider's search backend/index, not
-  just the model.
-- **Forced tool-choice and server-side search don't mix safely in one
-  call**, so grounding is a genuinely separate step, not a tool bolted onto
-  the existing classification call. The classification step still uses
-  `tool_choice: {type: "tool", ...}` to force the structured JSON schema
-  back, completely unchanged from before — the grounding research result
-  (if any) is generated first, then folded into the classification
-  prompt's user message as a clearly-labeled "CURRENT REGULATORY CONTEXT"
-  section, with `CLASSIFICATION_PROMPT` explicitly told that section is
-  background, not a case fact, and never overrides what's in the notes.
-- **Soft-fail, not a blocker.** `researchContext()` in `analyze-report.js`
-  catches any grounding failure (missing search support, rate limit,
-  provider error) and logs it, then proceeds with classification exactly as
-  it worked before this change. A user should never see "recommendation
-  failed" because search was down.
-- **Sources are shown, not hidden.** `sources` is returned as a sibling
-  field on the classify response (outside the HMAC-signed `classification`
-  object, so the existing integrity check — see the addendum above — is
-  completely untouched) and rendered in `ClassificationSummary.tsx` as a
-  "Grounded in live search" list of clickable links. Both AI Recommendation
-  and the full Report Generator show it.
-- Verified via unit-style tests against the exact documented response
-  shapes (Anthropic's `web_search_tool_result`/`web_search_result` blocks,
-  Gemini's `groundingMetadata.groundingChunks`) and an end-to-end mocked-
-  fetch run of the actual Express route handler confirming: (1) the
-  grounding text is injected into the classification prompt when search
-  succeeds, (2) classification still returns 200 with an empty `sources`
-  array when search fails, and (3) the HMAC signature is computed only over
-  the classification object, unaffected by sources either way.
+## Optional policy / discipline context
 
-## Addendum: Removed AI Case Analysis (2026-08-21)
+When useful, the investigator can provide:
 
-Dropped the AI Case Analysis toolkit tool and its `investigation-toolkit.js`
-`case_analysis` mode entirely, along with `AICaseAnalysis.tsx`. It genuinely
-duplicated AI Recommendation: both take case facts and return a risk
-level + discipline-tier read, just at different levels of polish (bullet
-points vs. the structured, HMAC-signed classification AI Recommendation
-and the Report Generator share). Having three tools that all answer
-"what's going on with this case" — Case Analysis, AI Recommendation, and
-the Report Generator — added confusion without adding real capability.
-The toolkit is now 7 steps instead of 8; nothing else changed shape (no
-renumbering of investigation phases, just removal of a redundant entry).
+- standard of proof;
+- applicable policy/code language;
+- internal corrective-action matrix;
+- anonymized precedent;
+- CBA/union/due-process requirements;
+- prior-history rules;
+- role/training/access expectations;
+- required approvals; and
+- other organization-specific criteria.
 
-## Residual risks (not addressed here)
+These values are decision criteria, not case evidence, and are included in the signed input hash.
 
-- **Cost protection** still ultimately benefits from a gateway/WAF-level
-  limit for defense-in-depth, but the in-process limiter is no longer purely
-  best-effort the way the per-instance Deno version was — a single Render
-  service means one shared limiter sees all traffic, not a fragmented view
-  across cold-started instances. Horizontal scaling (multiple Render
-  instances) would reintroduce the old per-instance caveat; this app runs as
-  a single instance.
-- **PHI is transmitted twice** (once per step). A server-side session/token
-  pattern would halve over-the-wire exposure.
-- **No database migration risk was introduced** by this change — there was
-  never a database. If a future feature adds one, it needs its own review
-  (RLS/access-control design), not inherited from this migration.
+## My Final Decision
+
+The investigator can optionally record whether they agree, agree with changes, need more information, or disagree with the AI result and can save the actual final finding, action/disposition, rationale, and timestamp. That human conclusion is used in exports and downstream letter handoff ahead of the AI recommendation.
+
+This remains current-result/export metadata, not a persistent enterprise approval system.
+
+## Regulatory source governance
+
+The regulatory reference library uses a centralized source registry with:
+
+- authority/source;
+- jurisdiction;
+- citation;
+- source URL;
+- current/proposed/guidance status;
+- effective or publication date where applicable;
+- last-verified date;
+- registry version; and
+- revision history.
+
+Sources exceeding the freshness threshold are visibly flagged for re-verification.
+
+Current corrections include:
+
+- HIPAA breach-notification timing is not misstated as 72 hours;
+- the proposed HIPAA Security Rule 72-hour item is treated as a proposed restoration-procedure requirement, not a current breach-notification rule;
+- CMS 2-hour/24-hour alleged-violation reporting is scoped to LTC under 42 CFR §483.12(c);
+- NYC Local Law 144 is not presented as a general employee-discipline rule.
+
+## AI evaluation program
+
+The repository contains realistic synthetic investigation scenarios for:
+
+- authorized access;
+- deliberate unauthorized access;
+- conflicting witnesses;
+- retaliation;
+- billing/document fraud;
+- controlled-substance discrepancies;
+- insufficient allegations; and
+- misleading notes / prompt injection.
+
+The scorer tests decision range, evidence-line integrity, contradiction handling, missing-information recognition, factor handling, human-review safeguards, automatic-discipline language, and research-topic de-identification.
+
+Deterministic evaluator tests run in normal CI. Live provider evaluations are run separately with `npm run eval:ai` because they call the configured model and may use web grounding.
+
+## Deliberate non-features for this personal build
+
+The following are **not defects for the current personal workflow** and should not be added merely for enterprise optics:
+
+- user accounts / SSO;
+- RBAC;
+- multi-user case assignment;
+- persistent case database;
+- supervisor approval queues;
+- enterprise dashboards;
+- immutable organization-wide audit logs;
+- retention/legal-hold administration.
+
+If the application is later converted into a real multi-user system processing identifiable PHI/PII, those become a separate required architecture with authenticated users, encrypted persistent storage, immutable server-side events, retention/deletion controls, vendor/BAA review, deployment hardening, and formal security/privacy governance.
+
+## Remaining release blocker
+
+The branch should not be treated as clean for merge until the production dependency audit is green. Functional syntax/tests/build/lint have already been exercised repeatedly; the remaining dependency advisory must be resolved and normal CI rerun before merge.

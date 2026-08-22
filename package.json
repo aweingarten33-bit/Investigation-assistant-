@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13"
   },
   "scripts": {
     "dev": "vite",
@@ -12,6 +12,8 @@
     "build:dev": "vite build --mode development",
     "start": "node server/index.js",
     "dev:server": "node --env-file=.env server/index.js",
+    "check:server": "node --check server/index.js && node --check server/lib/ai.js && node --check server/lib/anthropic.js && node --check server/lib/openai.js && node --check server/lib/gemini.js && node --check server/lib/rate-limit.js && node --check server/lib/investigation-utils.js && node --check server/lib/research-taxonomy.js && node --check server/lib/public-case-research.js && node --check server/routes/analyze-report.js && node --check server/routes/investigation-toolkit.js && node --check server/evals/investigation-cases.js && node --check server/evals/scoring.js && node --check server/evals/run-live-evals.js",
+    "eval:ai": "node server/evals/run-live-evals.js",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
@@ -61,13 +63,14 @@
     "lucide-react": "^0.462.0",
     "mammoth": "^1.12.0",
     "next-themes": "^0.3.0",
+    "pdfjs-dist": "6.2.108",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.61.1",
     "react-markdown": "^9.1.0",
     "react-resizable-panels": "^2.1.9",
-    "react-router-dom": "^6.30.1",
+    "react-router-dom": "^7.18.2",
     "recharts": "^2.15.4",
     "sonner": "^1.7.4",
     "tailwind-merge": "^2.6.0",

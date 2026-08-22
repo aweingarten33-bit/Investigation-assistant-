@@ -3,55 +3,55 @@ export interface NotifyItem {
   always: boolean;
   onlyIf?: string;
   what: string;
-  // Which AI Letter Generator template to point at for this handoff, if any.
   letterType?: string;
 }
 
-// Shared by the Decision Framework wizard, AI Recommendation, and the full
-// report results — who gets told what, and in what order, is the same
-// answer everywhere. HR comes first: for a substantiated finding, HR is who
-// you tell before anyone else — Compliance recommends, HR decides and acts.
+// Decision-support checklist, not a universal legal notification order.
+// Actual routing depends on organization policy, privilege strategy, labor
+// requirements, incident type, regulatory duties, and authorized leadership.
 export const NOTIFICATION_CHECKLIST: NotifyItem[] = [
   {
-    who: "HR",
+    who: "HR / Employee Relations",
     always: false,
-    onlyIf: "Substantiated finding",
-    what: "Tell them first, before anyone else. Send your findings and recommended action — HR reviews it, makes the final call, and typically delivers it to the employee. You're recommending; HR decides and executes.",
+    onlyIf: "A substantiated finding may lead to employment action",
+    what: "Route the evidence, material contradictions, policy questions, and corrective-action range through the organization's required HR/Employee Relations process before serious employment action. Compliance supplies the investigation record; authorized management/HR applies employment policy.",
     letterType: "hr_referral",
   },
   {
-    who: "The person who was investigated (the subject)",
-    always: true,
-    what: "They get told the outcome. If substantiated, their supervisor and HR handle the actual discipline conversation — that's not on you.",
+    who: "The person investigated",
+    always: false,
+    onlyIf: "Required by policy, due process, labor/CBA terms, or the chosen closure/discipline process",
+    what: "Provide the level of outcome notice required by policy and law. HR/supervision should handle employment-action communications where appropriate. Do not disclose privileged or unrelated confidential investigation material.",
   },
   {
-    who: "The person who reported it (the complainant)",
-    always: true,
-    what: "Tell them it was investigated and \"appropriate action was taken.\" Never tell them what happened to the other person — that part is confidential.",
+    who: "The reporter / complainant",
+    always: false,
+    onlyIf: "A status/closure update is appropriate and permitted",
+    what: "Acknowledge that the concern was reviewed and provide only the status information your policy permits. Do not disclose confidential personnel discipline or promise confidentiality that cannot be guaranteed.",
     letterType: "reporter_update",
   },
   {
-    who: "The subject's supervisor",
+    who: "Subject's leadership / supervisor",
     always: false,
-    onlyIf: "Substantiated finding",
-    what: "Summary of findings + corrective action plan. NOT the full investigation file.",
+    onlyIf: "Needed to implement approved corrective action or operational controls",
+    what: "Share only the information necessary for the supervisor's role, consistent with HR/Legal guidance and need-to-know principles.",
   },
   {
-    who: "Compliance Committee",
+    who: "Compliance / Privacy Committee",
     always: false,
-    onlyIf: "Substantiated or significant",
-    what: "Summary at next meeting. Trends and patterns. Significant cases in detail.",
+    onlyIf: "Required by governance policy or the matter is significant/trend-relevant",
+    what: "Use the level of detail required for oversight, trends, corrective action, and accountability; avoid unnecessary personnel detail.",
   },
   {
-    who: "Board / Audit Committee",
+    who: "Board / Audit or Compliance Committee",
     always: false,
-    onlyIf: "Large breach, termination, self-disclosure, government program issues",
-    what: "Summary only. No operational details.",
+    onlyIf: "Required by governance policy or significance warrants escalation",
+    what: "Escalate matters such as material breaches, government-program exposure, significant patient-safety events, self-disclosures, or major control failures according to the organization's governance framework.",
   },
   {
-    who: "OCR / State AG",
+    who: "Regulators / State agencies / Law enforcement / Licensing bodies",
     always: false,
-    onlyIf: "Required by law — ALWAYS check with Legal first",
-    what: "Only when legally required. See the Regulatory Deadlines section for exact windows.",
+    onlyIf: "A verified legal, regulatory, contractual, or reporting obligation applies",
+    what: "Verify the exact authority, scope, recipient, deadline, and required content before reporting. Coordinate with Legal/Privacy/Compliance as the organization requires; do not infer a reporting duty solely from an AI risk label.",
   },
 ];
