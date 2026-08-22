@@ -60,7 +60,6 @@ export default function Toolkit() {
   };
 
   const activeIndex = SECTIONS.findIndex((s) => s.id === activeSection);
-  const active = SECTIONS[activeIndex];
 
   return (
     <div className="min-h-screen bg-background">
@@ -69,17 +68,9 @@ export default function Toolkit() {
         <div className="sm:hidden">
           <div className="flex items-center gap-2 mb-3 sticky top-0 z-10 bg-background/95 backdrop-blur -mx-4 px-4 py-2">
             <ToolkitMenuButton activeId={activeSection} onSelect={setActiveSection} />
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold leading-none">
-                Step {activeIndex + 1} of {SECTIONS.length}
-              </p>
-              <div className="flex items-center gap-1.5">
-                <h1 className="text-sm font-bold text-foreground truncate">{active.label}</h1>
-                {active.isAI && (
-                  <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold tracking-wide uppercase">AI</span>
-                )}
-              </div>
-            </div>
+            <p className="min-w-0 flex-1 text-xs text-muted-foreground font-medium">
+              Step {activeIndex + 1} of {SECTIONS.length}
+            </p>
             <Link
               to="/"
               className="shrink-0 text-xs font-medium text-primary hover:text-primary/80 transition-colors whitespace-nowrap"
@@ -117,11 +108,10 @@ export default function Toolkit() {
             </nav>
 
             <div className="flex-1 min-w-0 rounded-2xl bg-background neu-raised overflow-hidden">
-              <div className="px-5 pt-4 pb-3 border-b border-border">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-0.5">
+              <div className="px-5 pt-3 pb-2 border-b border-border">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
                   Step {activeIndex + 1} of {SECTIONS.length}
                 </p>
-                <h2 className="text-base font-semibold text-foreground">{active.label}</h2>
               </div>
               <div className="bg-card px-5 py-5">
                 {SECTION_CONTENT[activeSection]}
