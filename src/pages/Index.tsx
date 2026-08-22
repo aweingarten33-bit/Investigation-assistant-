@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import mammoth from "mammoth";
 import { callApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,9 @@ import { exportToDocx } from "@/lib/docx-export";
 import { AnalysisResult } from "@/lib/types";
 import { SAMPLE_REPORT_TEXT } from "@/lib/sample-report";
 import { suggestLetterType, buildLetterPrefillDetails, letterButtonLabel } from "@/lib/letter-prefill";
-import { Loader2, Download, Sparkles, FileText, RotateCcw, XCircle, ShieldCheck, Mail, BookOpen } from "lucide-react";
+import { Loader2, Download, Sparkles, FileText, RotateCcw, XCircle, ShieldCheck, Mail } from "lucide-react";
 import { toast } from "sonner";
+import { HomeToolkitMenuButton } from "@/components/ToolkitMenu";
 
 const MIN_REPORT_LENGTH = 50;
 const MAX_REPORT_LENGTH = 100_000;
@@ -185,6 +186,9 @@ const Index = () => {
           <>
             {/* Sticky export bar */}
             <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border -mx-4 px-4 py-3 mb-4">
+              <div className="flex items-center justify-end mb-2">
+                <HomeToolkitMenuButton />
+              </div>
               <div className="flex gap-3">
                 <Button onClick={handleExport} className="flex-1 h-11 text-sm font-semibold">
                   <Download className="mr-2 h-4 w-4" />
@@ -217,13 +221,7 @@ const Index = () => {
                   <h1 className="text-base sm:text-xl font-bold text-foreground mb-0.5">
                     Compliance & Privacy Investigation Assistant
                   </h1>
-                  <Link
-                    to="/toolkit"
-                    className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary/10 transition-colors whitespace-nowrap"
-                  >
-                    <BookOpen className="h-3.5 w-3.5" />
-                    Toolkit
-                  </Link>
+                  <HomeToolkitMenuButton />
                 </div>
               <p className="text-xs sm:text-sm text-muted-foreground leading-snug">
                   Paste or upload your investigation notes to generate a Summary Investigative Report.
