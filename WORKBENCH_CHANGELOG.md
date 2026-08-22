@@ -18,8 +18,13 @@ This branch converts the app from a report/recommendation generator into an evid
 - Real client abort support for report-generation requests.
 - Safer rate limiting and stale-IP cleanup.
 - Regulatory reference corrections: removed the false HIPAA 72-hour breach-notification claim; scoped the CMS 2-hour rule to LTC §483.12 reporting; corrected NYC Local Law 144 scope.
+- Versioned regulatory source registry: authoritative source, jurisdiction, citation, effective/publication date, current/proposed/guidance status, last-verified date, registry version, and revision history are centralized instead of embedded ad hoc in the UI.
+- Regulatory freshness warning: sources older than the configured verification threshold are visibly flagged for re-review rather than silently treated as current.
+- Investigation AI evaluation framework: eight realistic synthetic scenarios cover authorized vs. unauthorized access, conflicting witnesses, retaliation, billing fraud, controlled-substance diversion, insufficient evidence, and prompt-injection/misleading notes.
+- Live model evaluation runner: `npm run eval:ai` sends the synthetic cases through the real `/api/analyze-report` classification path and scores decisions, evidence grounding, contradictions, missing information, factor analysis, human-review safeguards, prompt-injection resistance, and de-identified research topics.
+- Deterministic eval-scoring tests run in normal CI; live provider calls remain opt-in because they cost money and can vary across model versions.
 - Provider-neutral privacy disclosure.
-- Expanded automated tests and CI (syntax, unit tests, production build, lint).
+- Expanded automated tests and CI (syntax, unit tests, production dependency audit, production build, lint).
 
 ## Important limitation
 
