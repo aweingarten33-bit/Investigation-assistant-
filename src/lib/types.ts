@@ -85,6 +85,8 @@ export interface AnalysisResult {
   mitigatingFactors: string[];
   notesCompleteness: "complete" | "partial" | "insufficient";
   sources?: Source[];
+  researchBrief?: string | null;
+  researchProfile?: string | null;
   evidenceItems: EvidenceItem[];
   findings: TraceableFinding[];
   disciplineFactors: DisciplineFactor[];
@@ -101,8 +103,8 @@ export interface AnalysisResult {
   conclusion: string;
   missingInfo: string[] | null;
 
-  // Provenance / human review. This demo keeps these in the current result
-  // and export only; a production case store should persist immutable events.
+  // Provenance / human review. This personal-use build keeps these in the
+  // current result and export rather than maintaining an enterprise case DB.
   analysisMetadata?: AnalysisMetadata;
   humanReview?: HumanReviewRecord;
 
