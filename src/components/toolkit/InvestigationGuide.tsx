@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { ChevronDown, Scale, Shield, FileText, Users, Phone, BookOpen, Lightbulb, type LucideIcon } from "lucide-react";
+import {
+  ChevronDown, Scale, Shield, FileText, Users, Phone, BookOpen,
+  Lightbulb, AlertTriangle, type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Step {
@@ -12,8 +15,6 @@ interface Phase {
   id: string;
   title: string;
   icon: LucideIcon;
-  color: string;
-  accent: string;
   timeframe: string;
   tldr: string;
   steps: Step[];
@@ -22,159 +23,129 @@ interface Phase {
 const PHASES: Phase[] = [
   {
     id: "intake",
-    title: "Phase 1: Intake",
+    title: "Phase 1: Intake & Triage",
     icon: Phone,
-    color: "text-blue-600",
-    accent: "border-l-blue-500",
-    timeframe: "Day 0–1",
-    tldr: "A complaint came in. Log it, assess it, and decide if it needs a formal investigation.",
+    timeframe: "Immediately / Day 0–1",
+    tldr: "Capture the allegation, identify immediate risk, calendar any legal reporting clock, and preserve evidence before it changes or disappears.",
     steps: [
       {
-        title: "Log the complaint — TODAY",
+        title: "Capture the concern neutrally",
         bullets: [
-          "Write down exactly what was reported, by whom, when, and how (hotline, email, walk-in, etc.)",
-          "Don't editorialize — capture it word for word",
-          "Even a hallway conversation counts as receiving a complaint",
+          "Record what was reported, when, through what channel, and by whom if known.",
+          "Separate the reporter's allegation from facts already independently verified.",
+          "Do not label an allegation 'false,' 'fraud,' 'abuse,' 'retaliation,' or 'a HIPAA breach' before the evidence supports that conclusion.",
         ],
       },
       {
-        title: "Does this need a formal investigation?",
+        title: "Triage immediate risk before the full investigation",
         bullets: [
-          "YES if it involves: PHI/privacy exposure, patient harm, fraud, abuse, or regulatory non-compliance",
-          "NO if it's purely a performance or interpersonal issue with no compliance angle → send to HR",
-          "When in doubt → investigate. Better to find nothing than to miss something real.",
+          "Address patient/resident safety, ongoing PHI exposure, system access, controlled-substance security, retaliation risk, evidence destruction, and other active harm immediately.",
+          "Determine whether a regulatory or contractual reporting clock has already started. A final investigation report is not required before many initial notices.",
+          "Use Regulatory Deadlines for federal/New York clocks that may apply, then verify the exact rule against the facility type and facts.",
         ],
       },
       {
-        title: "How urgent is this?",
+        title: "Decide who should own or co-manage the matter",
         bullets: [
-          "🔴 HIGH (same-day action): active HIPAA breach, patient safety, fraud, government payer issues",
-          "🟡 MEDIUM (start within 48 hours): policy violations, non-urgent complaints",
-          "Is it a single incident or a pattern? Does it involve a large volume of records?",
+          "Compliance/Privacy may investigate directly, refer, or co-manage with HR, Legal, Risk, Quality, Security, Pharmacy, Medical Staff, Internal Audit, or another function depending on the issue.",
+          "A purely performance/interpersonal matter may belong primarily with HR; a patient-safety or professional-practice issue may need Quality/Medical Staff leadership; criminal or major legal exposure may require counsel.",
+          "Avoid investigator conflicts or material bias. If your independence is questionable, reassign or add an independent reviewer.",
         ],
       },
       {
-        title: "Check for conflicts of interest",
+        title: "Preserve evidence early",
         bullets: [
-          "The investigator can NOT be: the subject, in the subject's chain of command, or personally connected to them",
-          "If you have a conflict → escalate to your supervisor, compliance committee, or legal",
-        ],
-        tip: "Use the Conflict of Interest toolkit (next section) to work through types, red flags, and how to handle it if you find one.",
-      },
-      {
-        title: "Issue a document preservation hold",
-        bullets: [
-          "Tell relevant departments to preserve ALL documents, emails, records, and EHR audit trails related to this",
-          "Send it in writing. Keep a copy. Follow up to confirm they got it.",
-          "Destroying evidence — even accidentally — turns a manageable problem into a catastrophe",
+          "Preserve the evidence most likely to disappear first: EHR/audit logs, emails/messages, social-media posts, surveillance, call recordings, badge logs, medication-system logs, scheduling/assignment data, and document version history.",
+          "Use the organization's legal-hold or preservation process when appropriate; do not issue a 'legal hold' casually if that term is reserved for Legal.",
+          "Document what was preserved, by whom, when, and from what system/source.",
         ],
       },
       {
-        title: "Do you need legal counsel?",
+        title: "Privilege: involve counsel when it actually helps",
         bullets: [
-          "YES if: possible government investigation, whistleblower lawsuit, significant financial exposure, or criminal liability",
-          "Attorney-client privilege only works if counsel is directing the investigation",
+          "Counsel involvement can be important for government investigations, False Claims Act/whistleblower exposure, serious patient harm, professional-licensing issues, major financial exposure, or possible criminal conduct.",
+          "Do not assume that copying a lawyer or labeling a document 'privileged' automatically makes the investigation privileged. Privilege depends on the purpose, participants, confidentiality, and applicable law.",
+          "If counsel is directing a privileged investigation, follow counsel's instructions on interview warnings, documentation, and distribution.",
         ],
       },
     ],
   },
   {
     id: "planning",
-    title: "Phase 2: Plan",
+    title: "Phase 2: Plan the Investigation",
     icon: FileText,
-    color: "text-indigo-600",
-    accent: "border-l-indigo-500",
-    timeframe: "Day 1–3",
-    tldr: "Before you talk to anyone, make a plan. Winging it = missed evidence and conclusions that don't hold up.",
+    timeframe: "Day 0–3",
+    tldr: "Define exactly what you are trying to prove or disprove and what evidence would change the answer.",
     steps: [
       {
-        title: "Write a 1–2 page investigation plan",
+        title: "Turn the complaint into specific allegations",
         bullets: [
-          "What are the specific allegations?",
-          "What laws/regulations/policies could be violated?",
-          "What evidence do you need?",
-          "Who do you need to interview?",
-          "What's your timeline?",
-        ],
-        tip: "Not sure what you're dealing with yet? Run the facts through AI Case Analysis for a quick preliminary read on regulations and risk while you build this plan.",
-      },
-      {
-        title: "List all the evidence you need",
-        bullets: [
-          "Think broadly: EHR access logs, emails, texts, badge logs, training records, BAAs, surveillance",
-          "Write down who controls each piece of evidence",
+          "Break broad concerns into answerable allegations: who allegedly did what, when, where, involving whom/what, and why it may violate a rule.",
+          "For each allegation, identify the applicable policy/regulation and the elements or factual questions that matter.",
+          "Do not let one substantiated allegation automatically prove every allegation in the complaint.",
         ],
       },
       {
-        title: "Build your witness list",
+        title: "Build an evidence plan",
         bullets: [
-          "Start with the complainant → then witnesses → then the subject LAST",
-          "Interview the subject last so you have facts to work with",
-          "Ask: Who was there? Who supervises the area? Who would've seen the records?",
-        ],
-        tip: "Always interview the subject LAST. You want all the facts before you sit down with them.",
-      },
-      {
-        title: "Create a key allegations worksheet",
-        bullets: [
-          "For each allegation, write: the specific claim, the relevant law/policy, what proves it, what disproves it, and who has knowledge",
-          "This worksheet guides your entire investigation",
+          "List objective records first: EHR audit trails, patient charts, billing/claims, access logs, emails/texts, schedules, staffing, medication logs, policies, training, surveillance, contracts, and relevant external records.",
+          "Identify which source can prove or disprove each key fact and who controls that source.",
+          "Plan for contradictory evidence; do not collect only evidence that supports the allegation.",
         ],
       },
       {
-        title: "Set up your investigation file",
+        title: "Plan interview order based on the case — not a rigid rule",
         bullets: [
-          "Sections: Complaint → Plan → Evidence → Interviews → Analysis → Final Report",
-          "Everything goes in this file. Physical or digital — just keep it organized and secure.",
+          "Often it makes sense to review objective evidence and interview the reporter/key witnesses before the subject so you can ask focused questions.",
+          "But the subject does not always have to be last. An early subject interview may be necessary for safety, containment, preservation, identifying evidence, or resolving a simple factual issue.",
+          "Do not delay an urgent interview merely to preserve an artificial sequence.",
+        ],
+        tip: "A good sequence is the one that protects evidence, avoids witness contamination, and gives you the facts needed for the next interview.",
+      },
+      {
+        title: "Set a working timeline",
+        bullets: [
+          "Use internal target dates for evidence collection, interviews, analysis, report, and corrective action, but do not confuse those targets with legal deadlines.",
+          "If a case takes longer than planned, document why and whether interim safeguards remain necessary.",
         ],
       },
     ],
   },
   {
     id: "evidence",
-    title: "Phase 3: Collect Evidence",
+    title: "Phase 3: Collect & Validate Evidence",
     icon: BookOpen,
-    color: "text-emerald-600",
-    accent: "border-l-emerald-500",
-    timeframe: "Day 2–14",
-    tldr: "Get the evidence BEFORE you interview anyone. You want facts in hand before asking questions.",
+    timeframe: "Day 1 onward",
+    tldr: "Build the case from reliable sources. Preserve provenance and distinguish what a record proves from what you infer from it.",
     steps: [
       {
-        title: "Pull all documents first",
+        title: "Start with objective evidence when available",
         bullets: [
-          "EHR audit trails, policies, emails, training records, access logs — everything relevant",
-          "Note inconsistencies, gaps, or red flags",
-          "Build a timeline of events from the documents",
-          "Date-stamp everything: when you received it and from whom",
+          "Use original records and system-generated data where possible rather than screenshots or summaries alone.",
+          "Keep source context: filename/system, date/time, author/user, relevant page or line, and how the item was obtained.",
+          "For electronic evidence, preserve metadata/version history when it matters to authenticity or timing.",
         ],
       },
       {
-        title: "Read the actual rules",
+        title: "Read the actual governing rule",
         bullets: [
-          "Before you can say something violated a rule, you need to know what the rule says",
-          "Pull the relevant policies, 45 CFR sections, state laws, and guidance documents",
+          "Verify the current regulation/statute, facility policy, payer rule, contract, BAA, accreditation requirement, or professional standard that applies.",
+          "Check scope and definitions before citing a deadline or violation; hospital, nursing-home, Part 2, HIPAA, Medicare, Medicaid, state, and professional-reporting rules are not interchangeable.",
         ],
       },
       {
-        title: "Check for prior issues",
+        title: "Test alternative explanations",
         bullets: [
-          "Search for previous complaints, investigations, audits, or corrective actions involving the same person/department/issue",
-          "A single incident might be a mistake. A pattern is a systemic problem.",
+          "Ask what the same evidence would look like if the allegation were false, accidental, authorized, systemic rather than individual, or caused by a different person/process.",
+          "Actively look for evidence against your working theory, not just confirming evidence.",
         ],
       },
       {
-        title: "Secure electronic evidence",
+        title: "Expand scope only when evidence justifies it",
         bullets: [
-          "Work with IT to preserve emails and system access logs",
-          "Screenshot or export anything that could be modified or deleted",
-          "For HIPAA investigations, the EHR audit trail is the single most important piece of evidence",
-        ],
-      },
-      {
-        title: "Build a detailed timeline",
-        bullets: [
-          "Dates, times, people involved, what happened — in chronological order",
-          "This timeline is the backbone of your investigation and makes your final report way easier to write",
+          "One suspicious chart access may justify checking additional accesses; one coding error may justify a broader sample; one medication discrepancy may justify a pattern review.",
+          "Document why you expanded the scope and what population/time period you reviewed.",
+          "Do not turn every isolated mistake into a fishing expedition without a defensible reason.",
         ],
       },
     ],
@@ -183,224 +154,164 @@ const PHASES: Phase[] = [
     id: "interviews",
     title: "Phase 4: Interviews",
     icon: Users,
-    color: "text-amber-600",
-    accent: "border-l-amber-500",
-    timeframe: "Day 5–21",
-    tldr: "Interviews win or lose investigations. Prepare for each one. Never go in without a plan.",
+    timeframe: "As soon as useful evidence is available",
+    tldr: "Use interviews to fill factual gaps, test explanations, and resolve contradictions — not to replace records that should exist.",
     steps: [
       {
-        title: "Prepare for EACH interview separately",
+        title: "Prepare for each person separately",
         bullets: [
-          "Write out specific questions (open-ended first, then specific)",
-          "Know what documents you want to show them",
-          "Know what you need to learn from THIS person specifically",
-          "Know what facts you want to verify",
-        ],
-        tip: "The Interview Templates section has copy-ready scripts for witness, subject, Upjohn, and HIPAA-specific interviews — start from those instead of a blank page.",
-      },
-      {
-        title: "Upjohn Warning (if legal counsel is directing)",
-        bullets: [
-          "You represent the organization, NOT the employee",
-          "The privilege belongs to the organization and can be waived",
-          "The employee must keep the interview confidential",
-          "READ THIS FROM A SCRIPT — don't wing it",
-          "Document that you gave it: date, time, that they acknowledged understanding",
+          "Identify what this person can actually know first-hand and what you need to learn from them.",
+          "Start open-ended, then narrow to dates, actions, reasons, records, and contradictions.",
+          "Know which documents/logs you may need to show and what follow-up evidence their answer could create.",
         ],
       },
       {
-        title: "Interview structure: Opening → Questions → Closing",
+        title: "Give appropriate interview instructions",
         bullets: [
-          "OPENING: Explain the purpose (general terms), expect honest answers, no retaliation, keep it confidential",
-          "QUESTIONS: Start broad ('Walk me through what happened…') → narrow down ('You mentioned X…') → save tough questions for last",
-          "CLOSING: Summarize what they said, let them correct you, remind about confidentiality, say you may follow up",
+          "Explain the purpose at a level that allows a fair interview without unnecessarily revealing confidential information.",
+          "State truthfulness/cooperation and anti-retaliation expectations consistent with policy.",
+          "Do not promise absolute confidentiality and do not give an instruction that unlawfully restricts protected reporting or consultation rights.",
+          "If Legal directs an Upjohn-type warning, use the approved script rather than improvising it.",
         ],
       },
       {
-        title: "Always ask these 5 questions at the end",
+        title: "Resolve contradictions directly",
         bullets: [
-          "'Is there anyone else I should talk to?'",
-          "'Are there any documents I should look at?'",
-          "'Has this happened before?'",
-          "'Is there anything else I should know?'",
-          "'Any concerns about retaliation?'",
+          "When accounts conflict, identify the exact disputed fact instead of calling one witness 'credible' in the abstract.",
+          "Look for contemporaneous records, independent witnesses, consistency over time, motive/bias, first-hand knowledge, and objective corroboration.",
+          "Give the subject a meaningful opportunity to address material evidence and allegations before a final adverse finding when appropriate to the process.",
         ],
-        tip: "These catch things you didn't think to ask about.",
       },
       {
-        title: "Write up notes IMMEDIATELY after",
+        title: "Write factual interview notes",
         bullets: [
-          "Do it within an hour — don't rely on memory",
-          "Include: date, time, location, who was present, key statements (close to verbatim), your observations",
-          "Notes should be FACTUAL: 'Employee stated she was never trained' NOT 'Employee was clearly lying about training'",
+          "Document who participated, date/time, method/location, key questions and answers, documents shown, and follow-up items.",
+          "Use neutral attribution: 'Employee stated...' rather than editorial conclusions such as 'Employee lied' unless that conclusion is later supported and separately analyzed.",
+          "Avoid presenting paraphrases as verbatim quotations.",
         ],
       },
     ],
   },
   {
     id: "analysis",
-    title: "Phase 5: Make the Call",
+    title: "Phase 5: Analyze & Make Findings",
     icon: Scale,
-    color: "text-purple-600",
-    accent: "border-l-purple-500",
-    timeframe: "Day 14–30",
-    tldr: "You have all the evidence. Now decide: did it happen, and was it a violation?",
+    timeframe: "When material evidence is substantially complete",
+    tldr: "Decide each allegation using the governing standard, evidence for and against it, and clearly identified uncertainty.",
     steps: [
       {
-        title: "Organize evidence by allegation",
+        title: "Use the organization's actual finding standard",
         bullets: [
-          "For each allegation: separate evidence FOR from evidence AGAINST",
-          "Lay out: documents, interview summaries, timeline, relevant rules",
+          "Do not assume 'preponderance of the evidence' is always the required standard; use the policy, contractual, regulatory, or legal standard that actually governs the investigation.",
+          "If no standard is supplied, document the evidentiary basis and avoid overstating certainty.",
         ],
       },
       {
-        title: "Pick your finding",
+        title: "Separate evidence from reasoning",
         bullets: [
-          "SUBSTANTIATED: More likely than not it happened",
-          "UNSUBSTANTIATED: Can't prove it (doesn't mean it didn't happen)",
-          "NEEDS MORE INFO: Notes/evidence are too sparse to call it either way",
-        ],
-        tip: "Not sure what to recommend? Paste your findings into AI Recommendation above and it will tell you — or use the Decision Framework to walk through it yourself, step by step.",
-      },
-      {
-        title: "If substantiated — was a rule actually broken?",
-        bullets: [
-          "What's the specific law, regulation, or policy?",
-          "Did the conduct violate it?",
-          "Was there a valid exception (e.g., HIPAA treatment/payment/operations purpose)?",
-          "Was the person trained on the requirement?",
-          "Individual failure or systemic problem?",
+          "Evidence is what the records/witnesses actually show. Reasoning is the conclusion drawn from those facts.",
+          "Example: Evidence — audit log shows six chart openings and the employee was assigned elsewhere. Reasoning — the documented accesses lack an apparent work-related purpose. Final finding still considers the employee's explanation and applicable access rules.",
+          "Do not turn an inference into a fake quote, audit result, or source fact.",
         ],
       },
       {
-        title: "How bad was it?",
+        title: "Analyze every allegation independently",
         bullets: [
-          "INTENT: Honest mistake → negligent → reckless → intentional",
-          "SCOPE: One incident or widespread pattern?",
-          "HARM: Patients affected? Records exposed? Government program impact?",
-          "DURATION: One-time or ongoing?",
+          "Identify supporting evidence, contradicting evidence, missing evidence, and alternative explanations.",
+          "State whether the evidence supports the alleged conduct and separately whether that conduct violates the applicable law/policy.",
+          "Use 'needs more information' when the material evidence is genuinely incomplete rather than forcing a yes/no answer.",
         ],
       },
       {
-        title: "Sanity check before you finalize",
+        title: "Separate compliance risk from corrective action",
         bullets: [
-          "Did you review ALL relevant evidence?",
-          "Did you consider evidence both for AND against?",
-          "Did the subject get a chance to respond?",
-          "Is your conclusion supported by evidence, not assumptions?",
-          "Did you consider alternative explanations?",
-          "Did you consult legal if needed?",
+          "Risk level, patient harm, number of events, or regulatory exposure do not mechanically determine employee discipline.",
+          "Corrective-action analysis may require intent, role expectations, prior training/history, policy language, precedent, CBA/union rights, cooperation, concealment, personal benefit, patient safety, and HR/Legal review.",
+          "System fixes and individual accountability can both be appropriate; one does not exclude the other.",
         ],
       },
     ],
   },
   {
     id: "reporting",
-    title: "Phase 6: Write the Report",
+    title: "Phase 6: Report, Escalate & Correct",
     icon: FileText,
-    color: "text-rose-600",
-    accent: "border-l-rose-500",
-    timeframe: "Day 21–35",
-    tldr: "Write it so that someone reading it 3 years from now understands exactly what happened.",
+    timeframe: "Promptly after findings / earlier if a reporting clock requires it",
+    tldr: "Write a defensible record of what was investigated, what the evidence showed, what remains uncertain, and what must happen next.",
     steps: [
       {
-        title: "Report structure (follow this order)",
+        title: "Use a clear report structure",
         bullets: [
-          "1. INTRODUCTION — Who reported, when, how",
-          "2. INCIDENT OVERVIEW — What the notes say, summarized",
-          "3. INCIDENT DETAILS — Investigation steps and evidence, explicitly from the notes",
-          "4. INVESTIGATION FINDINGS — What was determined",
-          "5. RECOMMENDATIONS — The determination and recommended action",
-          "6. CONCLUSION — Summary of decision and risk level",
-        ],
-        tip: "Paste your investigation notes into the Report Generator on the home page — it drafts this structure automatically.",
-      },
-      {
-        title: "Writing rules",
-        bullets: [
-          "Write in third person ('The Compliance and Privacy Department found…' not 'I found…')",
-          "Be specific ('7 accesses on March 15' not 'multiple accesses')",
-          "No loaded language ('stated' not 'admitted' or 'claimed')",
-          "Every conclusion needs evidence backing it up",
-          "Note limitations ('Unable to interview Employee C who separated from employment')",
+          "Scope/allegations and how the matter was received.",
+          "Investigative steps and evidence reviewed.",
+          "Findings by allegation, including material contradictory evidence and limitations.",
+          "Applicable policies/regulations and analysis.",
+          "Corrective actions, process fixes, reporting obligations, and unresolved items.",
         ],
       },
       {
-        title: "Who gets the report?",
+        title: "Distribute on a need-to-know basis",
         bullets: [
-          "ALWAYS: CCO, Legal Counsel, person who assigned the investigation",
-          "IF SUBSTANTIATED: + department leadership, HR, Compliance Committee, possibly Board",
-          "EXTERNAL (if required): OCR, State AG, CMS, accreditor, law enforcement",
-          "Mark it CONFIDENTIAL and PRIVILEGED (if applicable). Keep a distribution log.",
-        ],
-        tip: "Check Regulatory Deadlines for exact filing windows (HIPAA's 60-day clock, self-disclosure), then use the AI Letter Generator to draft the subject, reporter, and any regulatory notifications.",
-      },
-      {
-        title: "Create the corrective action plan",
-        bullets: [
-          "IMMEDIATE: Stop the harm now (suspend access, contain the breach)",
-          "SHORT-TERM: Fix it (retrain, revise processes, discipline)",
-          "LONG-TERM: Prevent it from happening again (policy changes, system changes, monitoring)",
-          "Each action needs: responsible person + deadline + follow-up date",
+          "Do not use a universal 'always send to CCO + Legal + HR + leadership' list. Distribution should match the issue, governance structure, privilege strategy, and decision authority.",
+          "Limit sensitive investigation material to people who need it for oversight, legal advice, corrective action, quality/credentialing, reporting, or decision-making.",
+          "Do not label the final report 'privileged' unless counsel has determined privilege applies.",
         ],
       },
       {
-        title: "Close the investigation",
+        title: "Handle external reporting separately from the internal report",
         bullets: [
-          "Update the case status",
-          "Store all evidence per retention policy",
-          "Notify complainant: 'The matter was investigated and appropriate action was taken' — no details",
+          "Determine what must be reported, to whom, by when, and in what form. The deadline may arise before the internal report is complete.",
+          "Examples can include HHS/OCR, NYSDOH/NYPORTS, CMS/State Survey Agency, DEA, professional disciplinary agencies, payers, law enforcement, or self-disclosure channels depending on the case.",
+          "Verify the source rule each time; do not rely on remembered timing for high-stakes filings.",
+        ],
+      },
+      {
+        title: "Build corrective action that can be tested",
+        bullets: [
+          "Immediate containment: stop ongoing harm/exposure and protect patients/evidence.",
+          "Root-cause correction: fix the policy, workflow, training, access control, staffing, documentation, billing, or supervision issue that allowed the problem.",
+          "Individual action: use the organization's actual HR/Medical Staff/discipline process and precedent.",
+          "Assign an owner, due date, evidence of completion, and a retest date.",
         ],
       },
     ],
   },
   {
-    id: "post",
-    title: "Phase 7: Follow-Up",
+    id: "followup",
+    title: "Phase 7: Close, Retest & Monitor",
     icon: Shield,
-    color: "text-teal-600",
-    accent: "border-l-teal-500",
-    timeframe: "Day 30–90+",
-    tldr: "The investigation isn't done when the report is done. Follow up or the problem comes back.",
+    timeframe: "After immediate response through sustained-compliance review",
+    tldr: "An investigation is not really closed until required actions are completed and you know the fix worked.",
     steps: [
       {
-        title: "Track corrective actions to completion",
+        title: "Close the investigative record deliberately",
         bullets: [
-          "Don't just check it was done — verify it was done effectively",
-          "If the fix was retraining, did they pass the assessment?",
-          "If the fix was a policy revision, was it actually distributed?",
+          "Record the final status of each allegation, outstanding reporting, corrective-action owners, and any follow-up monitoring.",
+          "Retain the record according to the applicable investigation, legal, compliance, medical-staff, quality, privacy, or records-retention policy.",
+          "Reporter/subject communications should follow policy and confidentiality limits; do not disclose personnel details merely because a reporter asks for the outcome.",
         ],
       },
       {
-        title: "Watch for retaliation",
+        title: "TEST → FIND → FIX → RETEST",
         bullets: [
-          "Follow up with the complainant and witnesses periodically",
-          "Watch for subtle retaliation: schedule changes, exclusion from meetings, changed responsibilities",
-          "Document your anti-retaliation follow-up",
-        ],
-        tip: "Retaliation can turn a successful investigation into a major liability. Take it seriously.",
-      },
-      {
-        title: "Lessons learned",
-        bullets: [
-          "Were your policies adequate?",
-          "Did training cover this?",
-          "Did your monitoring catch it, or was it externally reported?",
-          "Use these insights to improve your compliance program",
+          "TEST: identify the control failure or condition that should not recur.",
+          "FIND: document the root cause and scope supported by evidence.",
+          "FIX: implement the corrective action.",
+          "RETEST: use data/audits/observations to verify the fix actually works and remains effective.",
         ],
       },
       {
-        title: "Report to leadership",
+        title: "Monitor retaliation and recurrence",
         bullets: [
-          "Include investigation outcomes in regular compliance reporting",
-          "Board and Compliance Committee need trends: how many, what types, corrective actions, recurring themes",
+          "Where retaliation risk exists, use proportionate follow-up with the reporter/witnesses and review objective employment/action data as appropriate.",
+          "Trend similar allegations, audit findings, privacy incidents, adverse events, billing issues, and corrective-action failures for systemic patterns.",
         ],
       },
       {
-        title: "Consider self-disclosure (for government program issues)",
+        title: "Escalate lessons learned",
         bullets: [
-          "Self-disclosure = significantly reduced penalties vs. a regulator finding it themselves",
-          "This MUST involve legal counsel — don't do this alone",
+          "Report trends and material matters through the organization's established Compliance, Quality, Privacy, Medical Staff, Risk, Audit, executive, or board governance structure.",
+          "Self-disclosure or government reporting should be a fact- and program-specific decision, usually coordinated with Legal/Compliance; do not assume disclosure always reduces penalties or is always required.",
         ],
       },
     ],
@@ -417,44 +328,37 @@ export default function InvestigationGuide() {
         <h2 className="text-lg font-bold text-foreground">Investigation Guide</h2>
       </div>
       <p className="text-xs text-muted-foreground -mt-3">
-        7 phases. Follow them in order. Each step tells you exactly what to do.
+        A practical hospital/compliance investigation sequence. Use the phases as a framework, not a rigid script; urgent safety, preservation, and reporting duties can change the order.
       </p>
+
+      <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/5 p-3">
+        <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
+        <p className="text-[11px] text-foreground leading-relaxed">
+          <strong>Important:</strong> no single workflow fits every privacy, billing, patient-safety, employment, medical-staff, or criminal matter. Follow the applicable law/policy and involve the right function when the facts require it.
+        </p>
+      </div>
 
       <div className="space-y-2">
         {PHASES.map((phase, phaseIdx) => {
           const isOpen = expandedPhase === phase.id;
+          const Icon = phase.icon;
           return (
-            <div key={phase.id} className={cn(
-              "rounded-lg border border-border overflow-hidden transition-shadow",
-              isOpen && "shadow-sm"
-            )}>
+            <div key={phase.id} className={cn("rounded-lg border border-border overflow-hidden transition-shadow", isOpen && "shadow-sm")}>
               <button
                 onClick={() => setExpandedPhase(isOpen ? null : phase.id)}
-                className={cn(
-                  "w-full flex items-center gap-3 p-3.5 hover:bg-secondary/20 transition-colors text-left border-l-[3px]",
-                  isOpen ? phase.accent : "border-l-transparent"
-                )}
+                className="w-full flex items-center gap-3 p-3.5 hover:bg-secondary/20 transition-colors text-left border-l-[3px] border-l-transparent"
               >
-                <div className={cn(
-                  "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm font-bold",
-                  isOpen ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"
-                )}>
-                  {phaseIdx + 1}
+                <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", isOpen ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground")}>
+                  <Icon className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-foreground">{phase.title}</h3>
-                    <span className={cn(
-                      "text-[9px] px-2 py-0.5 rounded-full font-semibold tracking-wide",
-                      isOpen ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground"
-                    )}>{phase.timeframe}</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-semibold text-foreground">{phaseIdx + 1}. {phase.title}</h3>
+                    <span className="text-[9px] px-2 py-0.5 rounded-full font-semibold tracking-wide bg-secondary text-muted-foreground">{phase.timeframe}</span>
                   </div>
                   {!isOpen && <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">{phase.tldr}</p>}
                 </div>
-                <ChevronDown className={cn(
-                  "w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200",
-                  !isOpen && "-rotate-90"
-                )} />
+                <ChevronDown className={cn("w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200", isOpen && "rotate-180")} />
               </button>
 
               {isOpen && (
@@ -462,7 +366,6 @@ export default function InvestigationGuide() {
                   <div className="px-4 py-2.5 bg-primary/5 border-b border-border/50">
                     <p className="text-xs text-foreground font-medium">{phase.tldr}</p>
                   </div>
-
                   <div className="divide-y divide-border/50">
                     {phase.steps.map((step, i) => (
                       <div key={i} className="px-4 py-3">
