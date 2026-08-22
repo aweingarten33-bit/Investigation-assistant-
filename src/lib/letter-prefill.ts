@@ -19,33 +19,50 @@ export function letterButtonLabel(letterType: string | undefined): string {
 export function buildLetterPrefillDetails(result: AnalysisResult): string {
   const lines: string[] = [
     `Case: ${result.caseId}`,
-    `Decision: ${result.decision.replace(/_/g, " ")}`,
+    `AI Decision Support Finding: ${result.decision.replace(/_/g, " ")}`,
     `Risk Level: ${result.riskLevel}`,
     `Violation Type: ${result.violationType}`,
     `Violation Count: ${result.violationCount}`,
-    `Corrective-Action Range: ${result.disciplineRange.minimum} to ${result.disciplineRange.maximum}`,
-    `Recommended for Review: ${result.disciplineRange.recommended}`,
+    `AI Corrective-Action Range: ${result.disciplineRange.minimum} to ${result.disciplineRange.maximum}`,
+    `AI Recommended for Review: ${result.disciplineRange.recommended}`,
     `Policy Dependent: ${result.disciplineRange.policyDependent ? "yes" : "no"}`,
   ];
+
+  if (result.humanReview) {
+    lines.push(
+      "",
+      "HUMAN REVIEW RECORD — controls over AI recommendation:",
+      `Reviewer: ${result.humanReview.reviewerName} (${result.humanReview.reviewerRole})`,
+      `Review Status: ${result.humanReview.status.replace(/_/g, " ")}`,
+      `Final Human Finding: ${result.humanReview.finalFinding}`,
+      `Final Human Action / Disposition: ${result.humanReview.finalAction}`,
+      `Human Rationale: ${result.humanReview.rationale}`,
+      `Reviewed At: ${result.humanReview.reviewedAt}`,
+    );
+  } else {
+    lines.push("", "HUMAN REVIEW RECORD: No final human decision has been recorded. Do not treat the AI corrective-action range as an authorized employment decision.");
+  }
+
   if (result.aggravatingFactors.length > 0) lines.push(`Aggravating Factors: ${result.aggravatingFactors.join("; ")}`);
   if (result.mitigatingFactors.length > 0) lines.push(`Mitigating Factors: ${result.mitigatingFactors.join("; ")}`);
   if (result.policyQuestions.length > 0) lines.push("", "Questions before final action:", ...result.policyQuestions.map((q) => `- ${q}`));
 
   lines.push("", "Incident Overview:", result.incidentOverview, "", "Incident Details:", result.incidentDetails);
   if (result.investigationFindings.length > 0) lines.push("", "Investigation Findings:", ...result.investigationFindings.map((f) => `- ${f}`));
-  lines.push("", "Recommendations:", result.recommendations);
+  lines.push("", "AI Recommendations / Decision Support:", result.recommendations);
   return lines.join("\n");
 }
 
 export function buildLetterPrefillFromClassification(classification: Classification, caseFacts: string): string {
   const lines: string[] = [
-    `Decision: ${classification.decision.replace(/_/g, " ")}`,
+    `AI Decision Support Finding: ${classification.decision.replace(/_/g, " ")}`,
     `Risk Level: ${classification.riskLevel}`,
     `Violation Type: ${classification.violationType}`,
     `Violation Count: ${classification.violationCount}`,
-    `Corrective-Action Range: ${classification.disciplineRange.minimum} to ${classification.disciplineRange.maximum}`,
-    `Recommended for Review: ${classification.disciplineRange.recommended}`,
+    `AI Corrective-Action Range: ${classification.disciplineRange.minimum} to ${classification.disciplineRange.maximum}`,
+    `AI Recommended for Review: ${classification.disciplineRange.recommended}`,
     `Policy Dependent: ${classification.disciplineRange.policyDependent ? "yes" : "no"}`,
+    "Human Review Record: Not yet recorded — AI output is not a final employment decision.",
   ];
   if (classification.aggravatingFactors.length > 0) lines.push(`Aggravating Factors: ${classification.aggravatingFactors.join("; ")}`);
   if (classification.mitigatingFactors.length > 0) lines.push(`Mitigating Factors: ${classification.mitigatingFactors.join("; ")}`);
