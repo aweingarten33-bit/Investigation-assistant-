@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
-import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
+import { callApi } from "@/lib/api";
 
 const MAX_CASE_FACTS_LENGTH = 20_000;
 
@@ -23,21 +23,13 @@ export default function AICaseAnalysis() {
       toast.error("Case facts are too long. Please shorten to under 20,000 characters.");
       return;
     }
-    if (!isSupabaseConfigured) {
-      toast.error("Service is not configured. Please contact the administrator.");
-      return;
-    }
-
     setIsAnalyzing(true);
     setResult("");
 
     try {
-      const { data, error } = await supabase.functions.invoke("investigation-toolkit", {
-        body: { mode: "case_analysis", caseFacts: caseFacts.trim() },
-      });
+      const { data, error } = await callApi<{ text: string }>("investigation-toolkit", { mode: "case_analysis", caseFacts: caseFacts.trim() });
       if (error) throw error;
-      if (data.error) throw new Error(data.error);
-      setResult(data.text);
+      setResult(data!.text);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to analyze case");
     } finally {

@@ -1,0 +1,27 @@
+services:
+  - type: web
+    runtime: node
+    name: investigation-assistant
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      # Which AI backend to use. Defaults to anthropic if unset — only set
+      # this if you're switching providers. Only the key/model pair for
+      # whichever provider you pick needs a real value; leave the rest blank.
+      - key: AI_PROVIDER
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        sync: false
+      - key: CLASSIFICATION_SIGNING_SECRET
+        sync: false

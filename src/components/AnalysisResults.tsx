@@ -41,7 +41,7 @@ export function AnalysisResults({ result }: { result: AnalysisResult }) {
   return (
     <div className="space-y-3 fade-in">
       {/* Classification Summary */}
-      <ClassificationSummary classification={result} />
+      <ClassificationSummary classification={result} sources={result.sources} />
 
       {/* Missing Info Alert */}
       {result.missingInfo && result.missingInfo.length > 0 && (
