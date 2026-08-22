@@ -190,8 +190,21 @@ const PLAYBOOKS: Playbook[] = [
   },
 ];
 
+type Tab = "preserve" | "questions" | "watch";
+const TABS: { id: Tab; label: string }[] = [
+  { id: "preserve", label: "Preserve" },
+  { id: "questions", label: "Questions" },
+  { id: "watch", label: "Watch-outs" },
+];
+
 export default function HospitalInvestigationPlaybooks() {
   const [open, setOpen] = useState<string | null>("social-media-phi");
+  const [activeTab, setActiveTab] = useState<Tab>("preserve");
+
+  const openPlaybook = (id: string) => {
+    setOpen((current) => (current === id ? null : id));
+    setActiveTab("preserve");
+  };
 
   return (
     <div className="mt-6 space-y-3">
@@ -209,7 +222,7 @@ export default function HospitalInvestigationPlaybooks() {
         const isOpen = open === playbook.id;
         return (
           <div key={playbook.id} className="rounded-xl border border-border bg-card overflow-hidden">
-            <button type="button" onClick={() => setOpen(isOpen ? null : playbook.id)} className="w-full p-4 flex items-start gap-3 text-left hover:bg-muted/20 transition-colors">
+            <button type="button" onClick={() => openPlaybook(playbook.id)} className="w-full p-4 flex items-start gap-3 text-left hover:bg-muted/20 transition-colors">
               <ShieldCheck className="h-4 w-4 text-primary mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0 max-w-prose">
                 <p className="text-sm font-semibold text-foreground">{playbook.title}</p>
@@ -218,18 +231,35 @@ export default function HospitalInvestigationPlaybooks() {
               <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
             </button>
             {isOpen && (
-              <div className="border-t border-border p-4 space-y-5 max-w-prose">
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide font-semibold text-primary mb-2">Preserve / pull first</p>
-                  <ul className="space-y-2">{playbook.preserve.map((item, i) => <li key={i} className="text-sm text-foreground leading-relaxed flex gap-2"><span>•</span><span>{item}</span></li>)}</ul>
+              <div className="border-t border-border max-w-prose">
+                <div className="flex gap-1.5 px-4 pt-3">
+                  {TABS.map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setActiveTab(tab.id)}
+                      className={cn(
+                        "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors",
+                        activeTab === tab.id
+                          ? tab.id === "watch" ? "bg-warning/15 text-warning" : "bg-primary/15 text-primary"
+                          : "text-muted-foreground hover:bg-secondary/50"
+                      )}
+                    >
+                      {tab.id === "watch" && <AlertTriangle className="h-3 w-3 inline mr-1 -mt-0.5" />}
+                      {tab.label}
+                    </button>
+                  ))}
                 </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide font-semibold text-primary mb-2">Questions that decide the case</p>
-                  <ul className="space-y-2">{playbook.questions.map((item, i) => <li key={i} className="text-sm text-foreground leading-relaxed flex gap-2"><span>•</span><span>{item}</span></li>)}</ul>
-                </div>
-                <div className="rounded-lg border border-warning/30 bg-warning/5 p-3">
-                  <p className="text-[10px] uppercase tracking-wide font-semibold text-warning mb-2 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" />Watch-outs</p>
-                  <ul className="space-y-2">{playbook.watch.map((item, i) => <li key={i} className="text-sm text-foreground leading-relaxed flex gap-2"><span>•</span><span>{item}</span></li>)}</ul>
+                <div className="p-4">
+                  {activeTab === "preserve" && (
+                    <ul className="space-y-2">{playbook.preserve.map((item, i) => <li key={i} className="text-sm text-foreground leading-relaxed flex gap-2"><span>•</span><span>{item}</span></li>)}</ul>
+                  )}
+                  {activeTab === "questions" && (
+                    <ul className="space-y-2">{playbook.questions.map((item, i) => <li key={i} className="text-sm text-foreground leading-relaxed flex gap-2"><span>•</span><span>{item}</span></li>)}</ul>
+                  )}
+                  {activeTab === "watch" && (
+                    <ul className="space-y-2">{playbook.watch.map((item, i) => <li key={i} className="text-sm text-foreground leading-relaxed flex gap-2"><span>•</span><span>{item}</span></li>)}</ul>
+                  )}
                 </div>
               </div>
             )}

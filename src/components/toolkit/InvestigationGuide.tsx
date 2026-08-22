@@ -320,6 +320,16 @@ const PHASES: Phase[] = [
 
 export default function InvestigationGuide() {
   const [expandedPhase, setExpandedPhase] = useState<string | null>("intake");
+  const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
+
+  const toggleStep = (key: string) => {
+    setExpandedSteps((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   return (
     <div className="space-y-4">
@@ -367,32 +377,46 @@ export default function InvestigationGuide() {
                     <p className="text-sm text-foreground font-medium leading-relaxed max-w-prose">{phase.tldr}</p>
                   </div>
                   <div className="divide-y divide-border/50">
-                    {phase.steps.map((step, i) => (
-                      <div key={i} className="px-4 py-4">
-                        <div className="flex items-start gap-2.5">
-                          <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                            <span className="text-[10px] font-bold text-primary">{i + 1}</span>
-                          </div>
-                          <div className="flex-1 min-w-0 max-w-prose">
-                            <p className="text-sm font-semibold text-foreground mb-2">{step.title}</p>
-                            <ul className="space-y-2">
-                              {step.bullets.map((bullet, j) => (
-                                <li key={j} className="flex items-start gap-2 text-sm text-foreground/90 leading-relaxed">
-                                  <span className="text-muted-foreground mt-0.5 shrink-0">•</span>
-                                  <span>{bullet}</span>
-                                </li>
-                              ))}
-                            </ul>
-                            {step.tip && (
-                              <div className="flex items-start gap-2 mt-3 px-3 py-2.5 bg-warning/10 border border-warning/30 rounded-md">
-                                <Lightbulb className="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />
-                                <p className="text-sm text-foreground leading-relaxed">{step.tip}</p>
+                    {phase.steps.map((step, i) => {
+                      const stepKey = `${phase.id}-${i}`;
+                      const stepOpen = expandedSteps.has(stepKey);
+                      return (
+                        <div key={i}>
+                          <button
+                            type="button"
+                            onClick={() => toggleStep(stepKey)}
+                            className="w-full flex items-start gap-2.5 px-4 py-3 text-left hover:bg-secondary/20 transition-colors"
+                          >
+                            <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                              <span className="text-[10px] font-bold text-primary">{i + 1}</span>
+                            </div>
+                            <p className="flex-1 min-w-0 text-sm font-semibold text-foreground">{step.title}</p>
+                            <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5 transition-transform duration-200", stepOpen && "rotate-180")} />
+                          </button>
+                          {stepOpen && (
+                            <div className="flex items-start gap-2.5 px-4 pb-4">
+                              <div className="w-5 shrink-0" />
+                              <div className="flex-1 min-w-0 max-w-prose">
+                                <ul className="space-y-2">
+                                  {step.bullets.map((bullet, j) => (
+                                    <li key={j} className="flex items-start gap-2 text-sm text-foreground/90 leading-relaxed">
+                                      <span className="text-muted-foreground mt-0.5 shrink-0">•</span>
+                                      <span>{bullet}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                                {step.tip && (
+                                  <div className="flex items-start gap-2 mt-3 px-3 py-2.5 bg-warning/10 border border-warning/30 rounded-md">
+                                    <Lightbulb className="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />
+                                    <p className="text-sm text-foreground leading-relaxed">{step.tip}</p>
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
