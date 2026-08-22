@@ -2,19 +2,21 @@
 
 _Last updated: 2026-08-22_
 
-This audit describes the current architecture after the evidence-traceability and discipline-engine overhaul.
+This audit describes the current architecture after the evidence-traceability, discipline-engine, search-privacy, and human-review overhaul.
 
 ## Current architecture
 
 1. User pastes or uploads de-identified investigation notes (`.docx` supported client-side).
 2. Frontend sends notes to `POST /api/analyze-report`.
-3. Server numbers each source line and performs a non-search AI taxonomy extraction.
-4. Only the resulting generic taxonomy is sent to the provider's search-enabled call for current regulatory context.
-5. Structured classification produces evidence references, findings, risk, discipline factors, action range, and open policy questions.
-6. Server validates the response with Zod and reconstructs evidence excerpts from the submitted source lines.
-7. The classification is HMAC-signed together with a SHA-256 hash of the exact notes + organization-specific context.
-8. Step 2 verifies that binding before generating the report.
-9. Results may be exported to Word with an Evidence Traceability Appendix.
+3. Server numbers each source line.
+4. A non-search structured AI call selects exactly one value from a closed regulatory taxonomy.
+5. The server maps that enum to a fixed server-owned generic research topic; only that generic topic is sent to the search-enabled AI call.
+6. Structured classification produces evidence references, findings, risk, discipline factors, action range, and open policy questions.
+7. Server validates the response with Zod and reconstructs evidence excerpts from the submitted source lines.
+8. The classification is HMAC-signed together with a SHA-256 hash of the exact notes + organization-specific context.
+9. Step 2 verifies that binding before generating the report.
+10. A human reviewer may explicitly approve, modify, reject, or defer the AI recommendation and record the actual final finding/action and rationale.
+11. Results may be exported to Word with an Evidence Traceability Appendix and the saved Human Review Record.
 
 ## Controls in place
 
@@ -27,6 +29,7 @@ This audit describes the current architecture after the evidence-traceability an
 - Out-of-range model line offsets are clamped to the submitted source.
 - Contradictory evidence remains visible and changes the calculated evidence-status label.
 - Findings without valid evidence are downgraded to `insufficient`.
+- A `corroborated` status is recomputed from valid evidence rather than trusted directly from model output.
 
 ### Classification/report integrity
 
@@ -52,12 +55,15 @@ Previous behavior sent up to 4,000 characters of raw case text into a search-ena
 
 Current behavior:
 
-1. Raw case text is sent only to the normal non-search inference call used to extract a generic violation taxonomy.
-2. The taxonomy is stripped/limited to a short generic phrase.
-3. The search-enabled call receives only that generic taxonomy.
-4. Search output is labeled "Current regulatory context consulted" and is not represented as evidence or validation of employee discipline.
+1. Raw case text is sent only to a **non-search structured taxonomy-selection call**.
+2. That call may return only a fixed enum such as `hipaa_unauthorized_access`, `false_claims_billing`, `controlled_substance_diversion`, or `patient_safety`.
+3. The server maps the enum to a fixed string in `server/lib/research-taxonomy.js`.
+4. The search-enabled provider call receives only that **server-owned fixed string**.
+5. Free-text model output cannot become a search query through this path.
+6. Raw notes, names, employers, dates, patient identifiers, and prompt-injected text therefore cannot be forwarded into search through taxonomy output.
+7. Search output is labeled "Current regulatory context consulted" and is not represented as evidence or validation of employee discipline.
 
-This reduces exposure to the search subsystem but does **not** make the application appropriate for real PHI by itself; the underlying AI inference provider still receives the submitted notes.
+This materially reduces exposure to the search subsystem but does **not** make the application appropriate for real PHI by itself; the underlying non-search AI inference provider still receives the submitted notes.
 
 ### Discipline / employment-decision safeguards
 
@@ -74,6 +80,23 @@ The current engine:
 - treats `recommendationTier` only as a coarse legacy workflow label rather than the decision engine;
 - provides an organization-context field so users can supply their actual policy/matrix/precedent/CBA rules;
 - no longer auto-calculates a discipline band in the manual Decision Framework.
+
+### Human review safeguard
+
+The main report workflow now includes a Human Review Record. The reviewer can:
+
+- approve the AI decision support;
+- approve it with changes;
+- require more information;
+- reject the AI recommendation;
+- record the final human finding;
+- record the final action/disposition;
+- explain the rationale/override;
+- identify reviewer name/role and timestamp.
+
+The saved human decision is included in exports and downstream letter-prefill data ahead of the AI recommendation. If no human review exists, those downstream artifacts explicitly state that the AI action range is not an authorized final employment decision.
+
+**Residual limitation:** this review record lives in the current client-side case result. It is not yet a persistent, immutable, authenticated enterprise approval record.
 
 ### API/cost hardening
 
@@ -94,11 +117,11 @@ The static deadline/reference library now:
 - labels internal investigation targets as organization governance targets rather than universal federal deadlines;
 - links users to primary HHS/CMS/OIG sources.
 
-## Regression testing
+## Regression testing / CI
 
 The placeholder always-passing test has been removed.
 
-`server/lib/investigation-utils.test.js` now tests:
+`server/lib/investigation-utils.test.js` tests:
 
 - line-ending normalization and stable line numbering;
 - input-hash binding to both notes and organization context;
@@ -109,7 +132,13 @@ The placeholder always-passing test has been removed.
 - corroboration status only when two valid supporting items remain;
 - filtering invalid evidence references from discipline factors.
 
-GitHub Actions runs `npm test`, `npm run build`, and `npm run lint` on pull requests and pushes to `main`.
+`server/lib/research-taxonomy.test.js` tests:
+
+- every permitted category maps to a server-owned topic;
+- arbitrary/free-text categories map to no topic;
+- prompt-injection-like text cannot become a search topic.
+
+CI is configured to run `npm run check:server`, `npm test`, `npm run build`, and `npm run lint` after `npm ci`. The explicit server syntax gate exists because the Vite build does not compile-check the Express route files.
 
 ## Important residual risks / not production-complete
 
@@ -117,9 +146,9 @@ GitHub Actions runs `npm test`, `npm run build`, and `npm run lint` on pull requ
 
 The app is still a demo. Anyone who can reach the service can use it. A production case system needs identity, role-based access control, least privilege, session controls, and administrative access review.
 
-### 2. No enterprise audit trail
+### 2. No persistent enterprise audit trail
 
-There is no persistent case database, immutable event log, reviewer signature/approval history, chain-of-custody record, or versioned case history. Those are major requirements for an enterprise investigative workbench.
+A human review can now be captured in the current case result/export, but there is still no persistent case database, immutable event log, authenticated reviewer signature, chain-of-custody record, assignment history, or versioned case history. Those remain major requirements for an enterprise investigative workbench.
 
 ### 3. PHI/PII contractual/compliance readiness is not established
 
@@ -127,7 +156,7 @@ No claim is made that the current Render/provider configuration is HIPAA-ready. 
 
 ### 4. Model evaluation is still early
 
-Utility regression tests exist, but a mature product also needs a curated investigation-evaluation corpus covering sparse evidence, contradictory evidence, authorized access, snooping, retaliation, fraud, patient-safety cases, prior-history variations, prompt injection, and organization-specific policy matrices. The expected output should be reviewed by experienced compliance/HR/legal users and run across model/provider upgrades.
+Utility regression tests exist, but a mature product also needs a curated investigation-evaluation corpus covering sparse evidence, contradictory evidence, authorized access, snooping, retaliation, fraud, patient-safety cases, prior-history variations, prompt injection, and organization-specific policy matrices. Expected outputs should be reviewed by experienced compliance/HR/legal users and re-run across prompt/model/provider upgrades.
 
 ### 5. Regulatory content can become stale
 
@@ -146,8 +175,8 @@ The UI warns users to de-identify data, but the app does not guarantee perfect a
 The next major architectural step is persistent, auditable case management rather than more prompt features:
 
 - authenticated users and RBAC;
-- case/evidence objects with source provenance and hashes;
-- reviewer assignments and approvals;
+- persistent case/evidence objects with source provenance and hashes;
+- authenticated reviewer assignments, approvals, and overrides;
 - immutable audit events;
 - evidence upload/storage controls;
 - configurable organization policy/matrix objects rather than free-text context alone;
