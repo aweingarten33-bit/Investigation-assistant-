@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22.13
           cache: npm
 
       - name: Install
@@ -37,7 +37,7 @@ jobs:
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Live investigation AI evaluation suite
+      - name: Live investigation AI evaluation suite (when provider secret is configured)
         env:
           AI_PROVIDER: ${{ secrets.AI_PROVIDER }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -47,4 +47,9 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
           CLASSIFICATION_SIGNING_SECRET: ${{ secrets.CLASSIFICATION_SIGNING_SECRET }}
-        run: npm run eval:ai
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ] || [ -n "$OPENAI_API_KEY" ] || [ -n "$GEMINI_API_KEY" ]; then
+            npm run eval:ai
+          else
+            echo "Live AI eval skipped: no provider API key is configured in GitHub Actions. Deterministic AI-eval scoring tests still ran in npm test."
+          fi
