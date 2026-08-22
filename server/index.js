@@ -33,15 +33,33 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal server error" });
 });
 
+// Vite's build gives every JS/CSS file a content hash in its filename
+// (index-K-qks3HO.css), so those are safe to cache aggressively forever — a
+// new deploy produces new filenames, never reuses an old one with different
+// content. index.html has no hash and is what references those filenames,
+// so it must never be cached: a stale cached index.html is exactly what
+// makes a real, successful deploy look like "nothing changed" on a phone
+// that cached the previous version's HTML shell.
+//
 // `index: true` (the default) lets this serve dist/index.html directly for
 // "/" — the SPA-fallback wildcard below only matches paths with at least one
 // segment, so root needs static's own index handling to cover it.
-app.use(express.static(distDir));
+app.use(express.static(distDir, {
+  index: "index.html",
+  setHeaders(res, filePath) {
+    if (path.basename(filePath) === "index.html") {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    } else {
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    }
+  },
+}));
 
 // SPA fallback: any other GET (e.g. a hard refresh on /toolkit) serves the
 // app shell so client-side routing can take over. Express 5 (path-to-regexp
 // v8) requires wildcards to be named — bare "*" throws at startup.
 app.get("/*splat", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   res.sendFile(path.join(distDir, "index.html"));
 });
 
