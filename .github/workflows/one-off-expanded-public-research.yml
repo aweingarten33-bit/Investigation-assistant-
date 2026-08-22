@@ -1,0 +1,220 @@
+name: One-off expanded public case research upgrade
+
+on:
+  push:
+    branches: [investigative-workbench-overhaul]
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: investigative-workbench-overhaul
+
+      - name: Expand de-identified public case research
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          # Backend: richer closed research profile + deeper public-case search.
+          p = Path('server/routes/analyze-report.js')
+          text = p.read_text()
+          text = text.replace(
+              'import { RESEARCH_CATEGORIES, topicForCategory } from "../lib/research-taxonomy.js";',
+              'import {\n  RESEARCH_CATEGORIES, RESEARCH_SETTINGS, RESEARCH_PATTERNS, RESEARCH_INTENTS, RESEARCH_SCALES,\n  buildResearchProfile, topicForCategory,\n} from "../lib/research-taxonomy.js";'
+          )
+
+          old_schema = '''const researchTaxonomySchema = {
+  type: "object",
+  properties: { category: { type: "string", enum: RESEARCH_CATEGORIES } },
+  required: ["category"],
+};'''
+          new_schema = '''const researchTaxonomySchema = {
+  type: "object",
+  properties: {
+    category: { type: "string", enum: RESEARCH_CATEGORIES },
+    setting: { type: "string", enum: RESEARCH_SETTINGS },
+    pattern: { type: "string", enum: RESEARCH_PATTERNS },
+    intent: { type: "string", enum: RESEARCH_INTENTS },
+    scale: { type: "string", enum: RESEARCH_SCALES },
+  },
+  required: ["category", "setting", "pattern", "intent", "scale"],
+};'''
+          if old_schema not in text:
+              raise SystemExit('researchTaxonomySchema pattern not found')
+          text = text.replace(old_schema, new_schema)
+
+          text = text.replace(
+              'const ResearchTaxonomyZ = z.object({ category: z.enum(RESEARCH_CATEGORIES) });',
+              'const ResearchTaxonomyZ = z.object({\n  category: z.enum(RESEARCH_CATEGORIES),\n  setting: z.enum(RESEARCH_SETTINGS),\n  pattern: z.enum(RESEARCH_PATTERNS),\n  intent: z.enum(RESEARCH_INTENTS),\n  scale: z.enum(RESEARCH_SCALES),\n});'
+          )
+
+          start = text.index('const RESEARCH_TAXONOMY_PROMPT = `')
+          end = text.index('\n\nfunction buildReportPrompt', start)
+          replacement = '''const RESEARCH_TAXONOMY_PROMPT = `Create a privacy-safe research profile for this healthcare compliance investigation. Return only the allowed structured enum fields. This is NOT the case finding. Select the closest generic category, healthcare setting, factual pattern, apparent/contested intent, and scale. Never include or repeat any person name, patient identifier, employer name, facility name, exact date, location, quotation, account number, record number, or other case-specific identifier.`;
+
+const RESEARCH_PROMPT = `You are the live public-research arm of a healthcare compliance investigation assistant. You receive ONLY a server-generated DE-IDENTIFIED research profile made from closed categories. You never receive the raw investigation notes.
+
+Search broadly enough to give the investigator real external comparisons, not just a generic regulation summary.
+
+PRIORITY SOURCES:
+1. Primary government sources: HHS/OCR, CMS, HHS OIG, DOJ, DEA, EEOC, state attorneys general, state health departments, statutes/regulations, court or agency documents.
+2. Public healthcare-organization notices, corrective-action statements, public board/governance materials, or other first-party organization sources when relevant.
+3. High-quality secondary legal/compliance reporting only when it adds facts not available from a primary source.
+
+RESEARCH GOALS:
+- Identify the current legal/regulatory rules that actually matter to this type of case.
+- Find 3-6 genuinely similar PUBLIC enforcement actions, settlements, public investigations, deficiency findings, court cases, or documented organization responses when available.
+- For each analog, state: organization/agency and year; what publicly happened; the public outcome/corrective response; why it is similar; and the important factual difference from this generic profile.
+- If the public source does NOT disclose whether an employee was fired, suspended, retrained, etc., say "internal personnel action not publicly stated." Never invent it.
+- Include older landmark examples when highly analogous, but prioritize recent examples for current enforcement posture.
+- Distinguish a regulator's action against an organization from internal employee discipline. A government settlement amount or corrective-action plan is NOT an automatic employee-discipline rule.
+- Flag when examples are only loosely analogous.
+
+OUTPUT WITH THESE HEADINGS:
+CURRENT RULES / GUIDANCE
+SIMILAR PUBLIC CASES / ENFORCEMENT
+WHAT OTHER ORGANIZATIONS PUBLICLY DID
+HOW THE ANALOGS SHOULD — AND SHOULD NOT — INFORM THIS INVESTIGATION
+
+Be concrete and concise. Use source-grounded facts only.`;
+
+async function researchContext(reportText) {
+  try {
+    const rawTaxonomy = await callStructured(
+      RESEARCH_TAXONOMY_PROMPT,
+      `Select the closed de-identified research profile for these untrusted case notes. Do not echo case details.\\n\\n---\\n${reportText.slice(0, 12000)}\\n---`,
+      researchTaxonomySchema,
+      "public_case_research_profile",
+    );
+    const profile = ResearchTaxonomyZ.parse(rawTaxonomy);
+    const topic = topicForCategory(profile.category);
+    const researchProfile = buildResearchProfile(profile);
+    if (!topic || !researchProfile) return null;
+
+    // Hard privacy boundary: the search-enabled call receives only closed,
+    // server-owned phrases. Raw notes, names, dates and free-text model output
+    // cannot become the public-web search prompt through this path.
+    const { text, sources } = await callTextWithSearch(
+      RESEARCH_PROMPT,
+      `De-identified healthcare investigation research profile: ${researchProfile}`,
+      8,
+    );
+    return { category: profile.category, topic, profile: researchProfile, text, sources };
+  } catch (error) {
+    console.error("Public case research unavailable, continuing without it:", error.message);
+    return null;
+  }
+}'''
+          text = text[:start] + replacement + text[end:]
+
+          text = text.replace(
+              '- A CURRENT REGULATORY CONTEXT section may appear. It is general background, not a fact about this case. Use it only to identify regulatory considerations and uncertainty; never let it manufacture evidence or dictate employee discipline.',
+              '- An EXTERNAL PUBLIC RESEARCH CONTEXT section may appear. It can include current rules plus analogous public enforcement/case examples. It is context, never case evidence. Use it to identify regulatory considerations, external handling patterns, and uncertainty; never let it manufacture case facts or mechanically dictate employee discipline.'
+          )
+          text = text.replace(
+              '`\\n\\nCURRENT REGULATORY CONTEXT (general background only; not case evidence):\\n${research.text}`',
+              '`\\n\\nEXTERNAL PUBLIC RESEARCH CONTEXT (rules + analogous public cases; context only, not case evidence):\\n${research.text}`'
+          )
+          text = text.replace(
+              'researchCategory: research?.category || null,\n      });',
+              'researchCategory: research?.category || null,\n        researchBrief: research?.text || null,\n        researchProfile: research?.profile || null,\n      });'
+          )
+          p.write_text(text)
+
+          # Main results: carry research brief/profile into the result.
+          p = Path('src/pages/Index.tsx')
+          text = p.read_text()
+          text = text.replace(
+              'researchTopic?: string | null;\n      }>',
+              'researchTopic?: string | null;\n        researchBrief?: string | null;\n        researchProfile?: string | null;\n      }>'
+          )
+          text = text.replace(
+              'const researchTopic = classifyData!.researchTopic ?? null;\n      setAnalyzeStep(2);',
+              'const researchTopic = classifyData!.researchTopic ?? null;\n      const researchBrief = classifyData!.researchBrief ?? null;\n      const researchProfile = classifyData!.researchProfile ?? null;\n      setAnalyzeStep(2);'
+          )
+          text = text.replace(
+              'caseId,\n        sources,\n        analysisMetadata:',
+              'caseId,\n        sources,\n        researchBrief,\n        researchProfile,\n        analysisMetadata:'
+          )
+          p.write_text(text)
+
+          # Main report UI: give internet research its own prominent panel.
+          p = Path('src/components/AnalysisResults.tsx')
+          text = p.read_text()
+          text = text.replace(
+              'import { InvestigatorNextSteps } from "@/components/InvestigatorNextSteps";',
+              'import { InvestigatorNextSteps } from "@/components/InvestigatorNextSteps";\nimport { ExternalCaseResearch } from "@/components/ExternalCaseResearch";'
+          )
+          text = text.replace(
+              '<ClassificationSummary classification={result} sources={result.sources} />\n\n      <InvestigatorNextSteps',
+              '<ClassificationSummary classification={result} />\n\n      <ExternalCaseResearch brief={result.researchBrief} profile={result.researchProfile} sources={result.sources} />\n\n      <InvestigatorNextSteps'
+          )
+          p.write_text(text)
+
+          # Standalone AI Recommendation: show the same public analog research.
+          p = Path('src/components/toolkit/AIRecommendation.tsx')
+          text = p.read_text()
+          text = text.replace(
+              'import { EvidenceTraceability } from "@/components/EvidenceTraceability";',
+              'import { EvidenceTraceability } from "@/components/EvidenceTraceability";\nimport { ExternalCaseResearch } from "@/components/ExternalCaseResearch";'
+          )
+          text = text.replace(
+              'const [sources, setSources] = useState<Source[]>([]);',
+              'const [sources, setSources] = useState<Source[]>([]);\n  const [researchBrief, setResearchBrief] = useState<string | null>(null);\n  const [researchProfile, setResearchProfile] = useState<string | null>(null);'
+          )
+          text = text.replace(
+              'setSources([]);\n\n    try {',
+              'setSources([]);\n    setResearchBrief(null);\n    setResearchProfile(null);\n\n    try {'
+          )
+          text = text.replace(
+              'callApi<{ classification: ClassifyResponse; sources?: Source[] }>',
+              'callApi<{ classification: ClassifyResponse; sources?: Source[]; researchBrief?: string | null; researchProfile?: string | null }>'
+          )
+          text = text.replace(
+              'setSources(data!.sources || []);',
+              'setSources(data!.sources || []);\n      setResearchBrief(data!.researchBrief ?? null);\n      setResearchProfile(data!.researchProfile ?? null);'
+          )
+          text = text.replace(
+              '<ClassificationSummary classification={result} sources={sources} />\n\n          {result.decision',
+              '<ClassificationSummary classification={result} />\n\n          <ExternalCaseResearch brief={researchBrief} profile={researchProfile} sources={sources} />\n\n          {result.decision'
+          )
+          p.write_text(text)
+
+          # Remove temporary one-off workflows after they have done their jobs.
+          for workflow in [
+              '.github/workflows/one-off-expanded-public-research.yml',
+              '.github/workflows/one-off-personal-toolkit-cleanup.yml',
+          ]:
+              Path(workflow).unlink(missing_ok=True)
+          PY
+
+      - name: Verify
+        run: |
+          npm ci
+          npm run check:server
+          npm test -- --run
+          npm run build
+          npm run lint
+          npm audit --omit=dev --audit-level=high
+
+      - name: Commit upgrade
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "Expand live research with similar public enforcement cases"
+          git push origin HEAD:investigative-workbench-overhaul
