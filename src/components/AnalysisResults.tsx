@@ -6,6 +6,7 @@ import { EvidenceTraceability } from "@/components/EvidenceTraceability";
 import { HumanReviewPanel } from "@/components/HumanReviewPanel";
 import { CaseAuditTrail } from "@/components/CaseAuditTrail";
 import { NotifyChecklist } from "@/components/NotifyChecklist";
+import { InvestigatorNextSteps } from "@/components/InvestigatorNextSteps";
 import {
   FileText, ListChecks, Briefcase, AlertTriangle,
   Scale, BookOpen, Info, ChevronDown, FileSearch,
@@ -42,17 +43,21 @@ function Section({
 
 export function AnalysisResults({
   result,
+  caseNotes,
   onHumanReviewChange,
 }: {
   result: AnalysisResult;
+  caseNotes: string;
   onHumanReviewChange?: (review: HumanReviewRecord | undefined) => void;
 }) {
   return (
     <div className="space-y-3 fade-in">
       <ClassificationSummary classification={result} sources={result.sources} />
 
+      <InvestigatorNextSteps result={result} caseNotes={caseNotes} />
+
       {(result.evidenceItems.length > 0 || result.findings.length > 0) && (
-        <Section icon={FileSearch} title="Evidence Workbench">
+        <Section icon={FileSearch} title="Evidence Map">
           <EvidenceTraceability
             evidenceItems={result.evidenceItems}
             findings={result.findings}
@@ -62,12 +67,6 @@ export function AnalysisResults({
           />
         </Section>
       )}
-
-      {onHumanReviewChange && (
-        <HumanReviewPanel result={result} onChange={onHumanReviewChange} />
-      )}
-
-      <CaseAuditTrail result={result} />
 
       {result.missingInfo && result.missingInfo.length > 0 && (
         <div className="rounded-lg border border-warning/30 bg-warning/5 p-5">
@@ -105,7 +104,7 @@ export function AnalysisResults({
       </Section>
 
       <Section icon={Scale} title="IV. Investigation Findings">
-        <p className="text-[11px] text-muted-foreground mb-3">Formal report language. Use the Evidence Workbench above to inspect the exact support and contradictions behind each decision-support finding.</p>
+        <p className="text-[11px] text-muted-foreground mb-3">Formal report language. Use the Evidence Map above to inspect the exact support and contradictions behind each finding.</p>
         <ul className="space-y-2">
           {result.investigationFindings.map((finding, i) => (
             <li key={i} className="flex gap-2 text-sm text-foreground">
@@ -137,6 +136,12 @@ export function AnalysisResults({
       <Section icon={FileText} title="VI. Conclusion">
         <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{result.conclusion}</p>
       </Section>
+
+      {onHumanReviewChange && (
+        <HumanReviewPanel result={result} onChange={onHumanReviewChange} />
+      )}
+
+      <CaseAuditTrail result={result} />
     </div>
   );
 }
