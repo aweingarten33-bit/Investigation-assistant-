@@ -27,6 +27,8 @@ import { HomeToolkitMenuButton } from "@/components/ToolkitMenu";
 const MIN_REPORT_LENGTH = 50;
 const MAX_REPORT_LENGTH = 100_000;
 const MAX_ORG_CONTEXT = 20_000;
+const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+const MAX_UPLOAD_FILES = 12;
 const ANALYSIS_VERSION = "investigation-assistant-personal-v3";
 
 const Index = () => {
@@ -70,30 +72,67 @@ const Index = () => {
     setAnalyzeStep(0);
   }, [invalidateRun]);
 
-  const handleFileSelect = useCallback(async (file: File) => {
-    const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-    if (!file.name.endsWith(".docx")) {
-      toast.error("Only .docx files are supported.");
+  const handleFileSelect = useCallback(async (files: File[]) => {
+    const selected = files.slice(0, MAX_UPLOAD_FILES);
+    if (files.length > MAX_UPLOAD_FILES) {
+      toast.error(`Upload up to ${MAX_UPLOAD_FILES} source files at a time.`);
       return;
     }
-    if (file.type && file.type !== DOCX_MIME) {
-      toast.error("Only .docx files are supported.");
+
+    const unsupported = selected.filter((file) => {
+      const lower = file.name.toLowerCase();
+      return !(lower.endsWith(".docx") || lower.endsWith(".txt") || lower.endsWith(".csv"));
+    });
+    if (unsupported.length) {
+      toast.error("Supported source files are .docx, .txt, and .csv.");
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error("File exceeds 10MB limit.");
+
+    const totalBytes = selected.reduce((sum, file) => sum + file.size, 0);
+    if (totalBytes > MAX_UPLOAD_BYTES) {
+      toast.error("Combined source files exceed the 15MB upload limit.");
       return;
     }
+
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const { value } = await mammoth.extractRawText({ arrayBuffer });
-      setReportText(value);
-      setFileName(file.name);
-      setFileSize(formatSize(file.size));
+      const chunks: string[] = [];
+      for (const file of selected) {
+        let value = "";
+        if (file.name.toLowerCase().endsWith(".docx")) {
+          const arrayBuffer = await file.arrayBuffer();
+          const extracted = await mammoth.extractRawText({ arrayBuffer });
+          value = extracted.value;
+        } else {
+          value = await file.text();
+        }
+
+        const sourceName = file.name.replace(/\s+/g, " ").trim();
+        const normalized = value.replace(/\r\n/g, "\n").trim();
+        if (!normalized) continue;
+
+        // Prefix each source line so the evidence mapper can preserve the
+        // originating filename even after all uploaded material is combined
+        // into the single line-numbered investigation record.
+        const labeled = normalized
+          .split("\n")
+          .map((line) => `[Source: ${sourceName}] ${line}`.trimEnd())
+          .join("\n");
+        chunks.push(labeled);
+      }
+
+      if (!chunks.length) {
+        toast.error("No readable text was found in the selected source files.");
+        return;
+      }
+
+      setReportText(chunks.join("\n\n"));
+      const names = selected.map((file) => file.name);
+      setFileName(names.length === 1 ? names[0] : `${names.length} source files: ${names.slice(0, 3).join(", ")}${names.length > 3 ? "…" : ""}`);
+      setFileSize(formatSize(totalBytes));
       setIsSample(false);
       setResult(null);
     } catch {
-      toast.error("Failed to extract text from file.");
+      toast.error("Failed to extract text from one or more source files.");
     }
   }, []);
 
@@ -271,7 +310,7 @@ const Index = () => {
                   <HomeToolkitMenuButton />
                   <h1 className="text-base sm:text-xl font-bold text-foreground mb-0.5">Compliance & Privacy Investigation Assistant</h1>
                 </div>
-                <p className="text-xs sm:text-sm text-muted-foreground leading-snug">Paste or upload investigation notes to map the evidence, identify contradictions, assess the finding, generate the report, and tell you exactly what to investigate next.</p>
+                <p className="text-xs sm:text-sm text-muted-foreground leading-snug">Paste notes or upload investigation sources to map the evidence, identify contradictions, assess the finding, generate the report, and tell you exactly what to investigate next.</p>
                 <PiiReminder />
               </div>
 
@@ -323,7 +362,7 @@ const Index = () => {
                 <Button onClick={handleCancel} variant="ghost" className="w-full h-9 text-sm text-muted-foreground hover:text-destructive"><XCircle className="mr-2 h-4 w-4" />Cancel</Button>
               )}
 
-              {!hasContent && !isAnalyzing && <p className="text-xs text-muted-foreground text-center">Paste notes or upload a .docx file to get started</p>}
+              {!hasContent && !isAnalyzing && <p className="text-xs text-muted-foreground text-center">Paste notes or upload one or more .docx/.txt/.csv source files to get started</p>}
             </div>
 
             <div className="mt-3"><Disclaimer /></div>
