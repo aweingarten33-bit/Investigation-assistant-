@@ -319,7 +319,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-[720px] px-4 py-3 sm:py-10">
+      <div className="mx-auto max-w-[720px] lg:max-w-[880px] xl:max-w-[1040px] px-4 py-3 sm:py-10">
         {result ? (
           <>
             <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border -mx-4 px-4 py-3 mb-4">
