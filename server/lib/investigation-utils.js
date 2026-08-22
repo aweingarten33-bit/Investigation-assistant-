@@ -22,17 +22,35 @@ export function buildInputHash(reportText, organizationContext = "") {
     .digest("hex");
 }
 
+function isValidEvidenceRange(item, maxLine) {
+  if (!item || typeof item.id !== "string" || !item.id.trim()) return false;
+  const start = Number(item.lineStart);
+  const end = Number(item.lineEnd);
+  return Number.isInteger(start)
+    && Number.isInteger(end)
+    && start >= 1
+    && end >= start
+    && end <= maxLine;
+}
+
 export function hydrateEvidenceTraceability(classification, reportText) {
   const lines = splitReportLines(reportText);
   const maxLine = lines.length;
   const seenIds = new Set();
 
+  // Never "repair" an AI citation by clamping an impossible line number to a
+  // real line. An out-of-range citation is discarded so the dependent finding
+  // becomes unsupported/insufficient instead of appearing verified.
   const evidenceItems = (classification.evidenceItems || [])
-    .filter((item) => item && typeof item.id === "string" && !seenIds.has(item.id))
-    .map((item) => {
+    .filter((item) => {
+      if (!isValidEvidenceRange(item, maxLine)) return false;
+      if (seenIds.has(item.id)) return false;
       seenIds.add(item.id);
-      const start = Math.max(1, Math.min(maxLine, Number(item.lineStart) || 1));
-      const end = Math.max(start, Math.min(maxLine, Number(item.lineEnd) || start));
+      return true;
+    })
+    .map((item) => {
+      const start = Number(item.lineStart);
+      const end = Number(item.lineEnd);
       const sourceLabel = (item.sourceLabel || "Investigation Notes").trim().slice(0, 120) || "Investigation Notes";
       const excerpt = lines.slice(start - 1, end).join("\n").trim();
       return {
@@ -52,6 +70,7 @@ export function hydrateEvidenceTraceability(classification, reportText) {
 
     let evidenceStatus = finding.evidenceStatus;
     if (supportingEvidenceIds.length === 0 && contradictingEvidenceIds.length === 0) evidenceStatus = "insufficient";
+    else if (supportingEvidenceIds.length === 0 && contradictingEvidenceIds.length > 0) evidenceStatus = "contradicted";
     else if (supportingEvidenceIds.length >= 2 && contradictingEvidenceIds.length === 0) evidenceStatus = "corroborated";
     else if (supportingEvidenceIds.length > 0 && contradictingEvidenceIds.length > 0) evidenceStatus = "contradicted";
     else if (supportingEvidenceIds.length === 1 && contradictingEvidenceIds.length === 0) evidenceStatus = "single_source";
