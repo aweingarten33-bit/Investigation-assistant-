@@ -211,6 +211,19 @@ good answer to before this.
   array when search fails, and (3) the HMAC signature is computed only over
   the classification object, unaffected by sources either way.
 
+## Addendum: Removed AI Case Analysis (2026-08-21)
+
+Dropped the AI Case Analysis toolkit tool and its `investigation-toolkit.js`
+`case_analysis` mode entirely, along with `AICaseAnalysis.tsx`. It genuinely
+duplicated AI Recommendation: both take case facts and return a risk
+level + discipline-tier read, just at different levels of polish (bullet
+points vs. the structured, HMAC-signed classification AI Recommendation
+and the Report Generator share). Having three tools that all answer
+"what's going on with this case" — Case Analysis, AI Recommendation, and
+the Report Generator — added confusion without adding real capability.
+The toolkit is now 7 steps instead of 8; nothing else changed shape (no
+renumbering of investigation phases, just removal of a redundant entry).
+
 ## Residual risks (not addressed here)
 
 - **Cost protection** still ultimately benefits from a gateway/WAF-level
