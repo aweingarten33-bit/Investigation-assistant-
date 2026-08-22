@@ -4,14 +4,18 @@ import {
   Shield, Building2, FileWarning,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  getRegulatorySource,
+  isRegulatorySourceStale,
+  type RegulatorySourceId,
+} from "@/lib/regulatory-sources";
 
 type Deadline = {
   timeframe: string;
   title: string;
   scope: string;
   actions: string[];
-  sourceLabel: string;
-  sourceUrl: string;
+  sourceId: RegulatorySourceId;
   proposed?: boolean;
 };
 
@@ -39,8 +43,7 @@ const SECTIONS: Section[] = [
           "Notice content and substitute-notice requirements are specified by the Breach Notification Rule.",
           "Document the breach analysis and why notification was or was not required.",
         ],
-        sourceLabel: "HHS — Breach Notification Rule / 45 CFR §164.404",
-        sourceUrl: "https://www.hhs.gov/hipaa/for-professionals/breach-notification/index.html",
+        sourceId: "hipaa_individual_notice",
       },
       {
         timeframe: "Without unreasonable delay; no later than 60 calendar days",
@@ -51,8 +54,7 @@ const SECTIONS: Section[] = [
           "Media notice may also be required when more than 500 residents of a State or jurisdiction are affected.",
           "Do not treat 60 days as a waiting period; the rule says without unreasonable delay.",
         ],
-        sourceLabel: "HHS — Notice to the Secretary / 45 CFR §164.408",
-        sourceUrl: "https://www.hhs.gov/hipaa/for-professionals/breach-notification/breach-reporting/index.html",
+        sourceId: "hipaa_secretary_notice",
       },
       {
         timeframe: "No later than 60 days after the end of the calendar year",
@@ -62,8 +64,7 @@ const SECTIONS: Section[] = [
           "Smaller breaches may be reported to the Secretary on an annual basis.",
           "This annual HHS timing does not extend the separate individual-notification deadline.",
         ],
-        sourceLabel: "HHS — Notice to the Secretary / 45 CFR §164.408(c)",
-        sourceUrl: "https://www.hhs.gov/hipaa/for-professionals/breach-notification/breach-reporting/index.html",
+        sourceId: "hipaa_secretary_notice",
       },
       {
         timeframe: "Without unreasonable delay; no later than 60 calendar days",
@@ -74,8 +75,7 @@ const SECTIONS: Section[] = [
           "A BAA may require a shorter contractual reporting window; check the actual agreement.",
           "Provide affected-individual information and other available notice information as required by §164.410.",
         ],
-        sourceLabel: "HHS — Business Associate Notification / 45 CFR §164.410",
-        sourceUrl: "https://www.hhs.gov/hipaa/for-professionals/breach-notification/index.html",
+        sourceId: "hipaa_business_associate_notice",
       },
     ],
   },
@@ -94,8 +94,7 @@ const SECTIONS: Section[] = [
           "The 2-hour timeframe applies when the alleged event involves abuse or results in serious bodily injury.",
           "Protect residents while the investigation is pending; do not delay initial reporting to first decide whether the allegation is credible.",
         ],
-        sourceLabel: "CMS State Operations Manual Appendix PP — F609 / 42 CFR §483.12(c)",
-        sourceUrl: "https://www.cms.gov/medicare/provider-enrollment-and-certification/guidanceforlawsandregulations/nursing-homes",
+        sourceId: "cms_ltc_alleged_violations",
       },
       {
         timeframe: "No later than 24 hours",
@@ -105,8 +104,7 @@ const SECTIONS: Section[] = [
           "For covered alleged neglect, exploitation, misappropriation, or mistreatment that does not involve abuse and does not result in serious bodily injury, the federal timeframe is no later than 24 hours.",
           "State law may impose different or additional reporting obligations.",
         ],
-        sourceLabel: "CMS State Operations Manual Appendix PP — F609 / 42 CFR §483.12(c)",
-        sourceUrl: "https://www.cms.gov/medicare/provider-enrollment-and-certification/guidanceforlawsandregulations/nursing-homes",
+        sourceId: "cms_ltc_alleged_violations",
       },
     ],
   },
@@ -119,14 +117,13 @@ const SECTIONS: Section[] = [
       {
         timeframe: "PROPOSED — not a current breach-notification deadline",
         title: "72-hour restoration procedure proposal",
-        scope: "2024 HIPAA Security Rule NPRM",
+        scope: "HIPAA Security Rule NPRM",
         actions: [
           "The proposal would require written procedures to restore the loss of certain relevant electronic information systems and data within 72 hours.",
           "This is not a proposal to change HHS HIPAA breach notification from 60 days to 72 hours.",
           "HHS states that the current Security Rule remains in effect while rulemaking is underway. Verify current rule status before operationalizing any proposed requirement.",
         ],
-        sourceLabel: "HHS — HIPAA Security Rule NPRM Fact Sheet",
-        sourceUrl: "https://www.hhs.gov/hipaa/for-professionals/security/hipaa-security-rule-nprm/factsheet/index.html",
+        sourceId: "hipaa_security_nprm_2024",
         proposed: true,
       },
     ],
@@ -147,8 +144,7 @@ const SECTIONS: Section[] = [
           "When an investigation exceeds its target, document why, what remains open, and any interim protections.",
           "A legal/regulatory deadline always overrides an internal service-level target.",
         ],
-        sourceLabel: "Organization policy / compliance program governance",
-        sourceUrl: "https://oig.hhs.gov/compliance/general-compliance-program-guidance/",
+        sourceId: "oig_gcpg",
       },
     ],
   },
@@ -161,12 +157,12 @@ export default function RegulatoryTimelines() {
     <div className="max-w-4xl mx-auto space-y-4">
       <div>
         <div className="flex items-center gap-2 mb-1"><Clock className="w-5 h-5 text-primary" /><h2 className="text-lg font-bold text-foreground">Regulatory Deadlines & Timing Reference</h2></div>
-        <p className="text-xs text-muted-foreground">Scoped federal reference points with primary-source links. Last substantively reviewed: August 2026.</p>
+        <p className="text-xs text-muted-foreground">Each rule is tied to a centralized source record with jurisdiction, effective/publication date, verification date, and version history.</p>
       </div>
 
       <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/5 p-4">
         <AlertTriangle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
-        <p className="text-xs text-foreground leading-relaxed"><strong>Always verify the rule for the facility type, state, contract, payer, accreditor, and facts in front of you.</strong> This page intentionally avoids pretending every healthcare investigation follows the same reporting clock.</p>
+        <p className="text-xs text-foreground leading-relaxed"><strong>Always verify the rule for the facility type, state, contract, payer, accreditor, and facts in front of you.</strong> A source older than the verification threshold is visibly flagged for re-review rather than silently treated as current.</p>
       </div>
 
       {SECTIONS.map((section) => {
@@ -182,17 +178,28 @@ export default function RegulatoryTimelines() {
 
             {isOpen && (
               <div className="border-t border-border p-4 space-y-3">
-                {section.deadlines.map((deadline) => (
-                  <div key={`${section.id}-${deadline.title}`} className={cn("rounded-lg border p-4", deadline.proposed ? "border-warning/30 bg-warning/5" : "border-border bg-background")}>
-                    <div className="flex flex-wrap gap-2 items-center mb-2">
-                      <span className={cn("text-[10px] uppercase tracking-wide font-bold px-2 py-1 rounded", deadline.proposed ? "bg-warning/15 text-warning" : "bg-primary/10 text-primary")}>{deadline.timeframe}</span>
-                      <span className="text-[10px] text-muted-foreground">{deadline.scope}</span>
+                {section.deadlines.map((deadline) => {
+                  const source = getRegulatorySource(deadline.sourceId);
+                  const stale = isRegulatorySourceStale(source);
+                  return (
+                    <div key={`${section.id}-${deadline.title}`} className={cn("rounded-lg border p-4", deadline.proposed ? "border-warning/30 bg-warning/5" : "border-border bg-background")}>
+                      <div className="flex flex-wrap gap-2 items-center mb-2">
+                        <span className={cn("text-[10px] uppercase tracking-wide font-bold px-2 py-1 rounded", deadline.proposed ? "bg-warning/15 text-warning" : "bg-primary/10 text-primary")}>{deadline.timeframe}</span>
+                        <span className="text-[10px] text-muted-foreground">{deadline.scope}</span>
+                        {stale && <span className="text-[10px] font-semibold text-warning">SOURCE RE-VERIFICATION DUE</span>}
+                      </div>
+                      <p className="text-sm font-semibold text-foreground mb-2">{deadline.title}</p>
+                      <ul className="space-y-1.5">{deadline.actions.map((action, index) => <li key={index} className="text-xs text-foreground flex gap-2"><span className="text-muted-foreground">•</span><span>{action}</span></li>)}</ul>
+
+                      <div className="mt-3 rounded-md border border-border/70 bg-muted/20 p-3 space-y-1">
+                        <a href={source.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-primary underline underline-offset-2 hover:text-primary/80">{source.authority} — {source.citation}<ExternalLink className="h-3 w-3" /></a>
+                        <p className="text-[10px] text-muted-foreground"><strong>Jurisdiction:</strong> {source.jurisdiction}</p>
+                        <p className="text-[10px] text-muted-foreground"><strong>Status:</strong> {source.status} · <strong>Effective:</strong> {source.effectiveDate ?? "Not yet effective / guidance only"}</p>
+                        <p className="text-[10px] text-muted-foreground"><strong>Last verified:</strong> {source.lastVerified} · <strong>Registry version:</strong> {source.version}</p>
+                      </div>
                     </div>
-                    <p className="text-sm font-semibold text-foreground mb-2">{deadline.title}</p>
-                    <ul className="space-y-1.5">{deadline.actions.map((action, index) => <li key={index} className="text-xs text-foreground flex gap-2"><span className="text-muted-foreground">•</span><span>{action}</span></li>)}</ul>
-                    <a href={deadline.sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-[11px] text-primary underline underline-offset-2 hover:text-primary/80">{deadline.sourceLabel}<ExternalLink className="h-3 w-3" /></a>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
