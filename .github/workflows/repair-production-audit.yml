@@ -1,0 +1,46 @@
+name: Repair Production Audit
+
+on:
+  push:
+    branches:
+      - investigative-workbench-overhaul
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout workbench branch
+        uses: actions/checkout@v4
+        with:
+          ref: investigative-workbench-overhaul
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install committed dependency graph
+        run: npm ci
+
+      - name: Apply non-breaking production audit fixes
+        run: npm audit fix --omit=dev
+
+      - name: Verify high-severity production audit is clean
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Commit repaired dependency metadata
+        shell: bash
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "Production dependency metadata already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "Repair production dependency vulnerabilities"
+          git push origin HEAD:investigative-workbench-overhaul
