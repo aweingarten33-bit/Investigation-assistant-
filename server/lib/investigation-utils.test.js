@@ -154,6 +154,35 @@ describe("investigation evidence utilities", () => {
     expect(result.hypotheses[0].supportingEvidenceIds).toEqual([]);
     expect(result.hypotheses[0].state).toBe("unresolved");
   });
+
+  it("does not leave a hypothesis labeled contradicted/weakened once its contradicting evidence is stripped", () => {
+    const result = hydrateEvidenceTraceability(baseClassification({
+      evidenceItems: [
+        { id: "E1", sourceLabel: "Notes", lineStart: 1, lineEnd: 1, evidenceType: "document", stance: "supports", summary: "Known fact" },
+      ],
+      hypotheses: [
+        { id: "H1", label: "Contradicted but evidence invented", description: "d", state: "contradicted", supportingEvidenceIds: ["E1"], contradictingEvidenceIds: ["FAKE"], unresolvedQuestions: [] },
+        { id: "H2", label: "Weakened but evidence invented", description: "d", state: "weakened", supportingEvidenceIds: ["E1"], contradictingEvidenceIds: ["FAKE"], unresolvedQuestions: [] },
+      ],
+    }), "Known fact");
+
+    expect(result.hypotheses[0].contradictingEvidenceIds).toEqual([]);
+    expect(result.hypotheses[0].state).toBe("supported");
+    expect(result.hypotheses[1].state).toBe("supported");
+  });
+
+  it("de-duplicates colliding hypothesis IDs instead of dropping one under a shared React key", () => {
+    const result = hydrateEvidenceTraceability(baseClassification({
+      hypotheses: [
+        { id: "H1", label: "First", description: "d", state: "unresolved", supportingEvidenceIds: [], contradictingEvidenceIds: [], unresolvedQuestions: [] },
+        { id: "H1", label: "Second (duplicate id from the model)", description: "d", state: "unresolved", supportingEvidenceIds: [], contradictingEvidenceIds: [], unresolvedQuestions: [] },
+      ],
+    }), "Known fact");
+
+    const ids = result.hypotheses.map((h) => h.id);
+    expect(new Set(ids).size).toBe(2);
+    expect(result.hypotheses[1].label).toBe("Second (duplicate id from the model)");
+  });
 });
 
 describe("deterministic closure gate", () => {

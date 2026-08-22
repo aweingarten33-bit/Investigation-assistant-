@@ -158,17 +158,31 @@ export function hydrateEvidenceTraceability(classification, reportText) {
     };
   });
 
+  const seenHypothesisIds = new Set();
   const hypotheses = (classification.hypotheses || []).map((hypothesis, index) => {
     const supportingEvidenceIds = (hypothesis.supportingEvidenceIds || []).filter((id) => validEvidenceIds.has(id));
     const contradictingEvidenceIds = (hypothesis.contradictingEvidenceIds || []).filter((id) => validEvidenceIds.has(id));
 
+    // Re-derive state from the evidence that actually survived validation —
+    // never leave a hypothesis labeled "contradicted"/"weakened" once the
+    // evidence backing that label was stripped as invalid, and never leave
+    // it labeled with no evidence on either side.
     let state = hypothesis.state;
-    if (supportingEvidenceIds.length === 0 && contradictingEvidenceIds.length > 0) state = "contradicted";
-    else if (supportingEvidenceIds.length === 0 && contradictingEvidenceIds.length === 0 && state === "supported") state = "unresolved";
+    if (supportingEvidenceIds.length === 0 && contradictingEvidenceIds.length === 0) {
+      state = "unresolved";
+    } else if (supportingEvidenceIds.length === 0 && contradictingEvidenceIds.length > 0) {
+      state = "contradicted";
+    } else if (contradictingEvidenceIds.length === 0 && (state === "contradicted" || state === "weakened")) {
+      state = "supported";
+    }
+
+    let id = hypothesis.id || `H${index + 1}`;
+    if (seenHypothesisIds.has(id)) id = `${id}-${index + 1}`;
+    seenHypothesisIds.add(id);
 
     return {
       ...hypothesis,
-      id: hypothesis.id || `H${index + 1}`,
+      id,
       supportingEvidenceIds,
       contradictingEvidenceIds,
       state,

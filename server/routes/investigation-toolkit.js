@@ -13,7 +13,13 @@ import {
 
 const MAX_FIELD_LENGTH = 20_000;
 const MAX_PLAN_CASE_LENGTH = 100_000;
-const MAX_PLAN_SUMMARY_LENGTH = 30_000;
+// analysisSummary is the classification JSON re-serialized by the client
+// (findings, evidenceItems, hypotheses, sufficiencyChecks, closureAssessment,
+// etc. -- see InvestigatorNextSteps.tsx's buildAnalysisSummary). At the
+// analyze-report.js schema's own max lengths that JSON can run past 800KB,
+// so budget generously above that -- the previous 30,000-char cap could
+// reject a well-documented, schema-valid case outright.
+const MAX_PLAN_SUMMARY_LENGTH = 1_000_000;
 const MAX_BODY_BYTES = (MAX_PLAN_CASE_LENGTH + MAX_PLAN_SUMMARY_LENGTH) * 4 + 16_384;
 const MIN_FIELD_LENGTH = 20;
 const isRateLimited = createRateLimiter();

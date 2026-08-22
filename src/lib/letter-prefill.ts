@@ -81,6 +81,7 @@ export function buildLetterPrefillDetails(result: AnalysisResult): string {
 export function buildLetterPrefillFromClassification(classification: Classification, caseFacts: string): string {
   const lines: string[] = [
     `AI Decision Support Finding: ${classification.decision.replace(/_/g, " ")}`,
+    `Investigation Closure Status: ${classification.closureAssessment.status.replace(/_/g, " ")}`,
     `Risk Level: ${classification.riskLevel}`,
     `Violation Type: ${classification.violationType}`,
     `Violation Count: ${classification.violationCount}`,
@@ -89,6 +90,19 @@ export function buildLetterPrefillFromClassification(classification: Classificat
     `Policy Dependent: ${classification.disciplineRange.policyDependent ? "yes" : "no"}`,
     "Human Review Record: Not yet recorded — AI output is not a final employment decision.",
   ];
+
+  if (classification.closureAssessment.status === "not_ready_to_close") {
+    lines.push(
+      "",
+      "INVESTIGATION CLOSURE GATE: NOT READY TO CLOSE. Do not present this handoff as a final investigative closure or final employment disposition.",
+    );
+  } else if (classification.closureAssessment.status === "ready_with_unresolved_limitations") {
+    lines.push(
+      "",
+      "INVESTIGATION CLOSURE GATE: READY WITH UNRESOLVED LIMITATIONS. Any closure communication must expressly preserve the documented evidentiary limitation.",
+    );
+  }
+
   if (classification.aggravatingFactors.length > 0) lines.push(`Aggravating Factors: ${classification.aggravatingFactors.join("; ")}`);
   if (classification.mitigatingFactors.length > 0) lines.push(`Mitigating Factors: ${classification.mitigatingFactors.join("; ")}`);
   if (classification.policyQuestions.length > 0) lines.push("", "Questions before final action:", ...classification.policyQuestions.map((q) => `- ${q}`));

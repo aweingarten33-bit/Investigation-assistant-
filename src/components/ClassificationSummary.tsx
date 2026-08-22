@@ -1,5 +1,11 @@
-import { AnalysisResult, Decision, RiskLevel, Source } from "@/lib/types";
-import { Shield, Globe, AlertTriangle } from "lucide-react";
+import { AnalysisResult, ClosureStatus, Decision, RiskLevel, Source } from "@/lib/types";
+import { CheckCircle2, CircleHelp, Shield, Globe, AlertTriangle } from "lucide-react";
+
+const closureMeta: Record<ClosureStatus, { label: string; className: string; icon: typeof CheckCircle2 }> = {
+  ready_to_close: { label: "Ready to close", className: "border-success/30 bg-success/5 text-success", icon: CheckCircle2 },
+  not_ready_to_close: { label: "Not ready to close", className: "border-warning/30 bg-warning/5 text-warning", icon: AlertTriangle },
+  ready_with_unresolved_limitations: { label: "Ready with unresolved limitations", className: "border-primary/30 bg-primary/5 text-primary", icon: CircleHelp },
+};
 
 const decisionStyles: Record<Decision, string> = {
   substantiated: "bg-destructive text-destructive-foreground",
@@ -24,12 +30,15 @@ export type Classification = Pick<
   AnalysisResult,
   "decision" | "confidenceScore" | "riskLevel" | "violationType" | "violationCount" |
   "recommendationTier" | "aggravatingFactors" | "mitigatingFactors" | "notesCompleteness" |
-  "evidenceItems" | "findings" | "disciplineFactors" | "disciplineRange" | "policyQuestions"
+  "evidenceItems" | "findings" | "disciplineFactors" | "disciplineRange" | "policyQuestions" |
+  "closureAssessment"
 > & { missingElements?: string[] };
 
 export function ClassificationSummary({ classification, sources }: { classification: Classification; sources?: Source[] }) {
   const c = classification;
   const primaryFinding = c.findings[0];
+  const closure = closureMeta[c.closureAssessment.status];
+  const ClosureIcon = closure.icon;
 
   return (
     <div className="rounded-lg border border-border bg-card p-5">
@@ -48,6 +57,16 @@ export function ClassificationSummary({ classification, sources }: { classificat
           Confidence: {c.confidenceScore}%
         </span>
       </div>
+
+      {c.closureAssessment.status !== "ready_to_close" && (
+        <div className={`mb-4 flex items-start gap-2 rounded-lg border p-3 ${closure.className}`}>
+          <ClosureIcon className="h-4 w-4 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide">{closure.label}</p>
+            <p className="mt-1 text-xs text-foreground">{c.closureAssessment.rationale}</p>
+          </div>
+        </div>
+      )}
 
       {primaryFinding && (
         <div className="mb-4 rounded-lg border border-border bg-background p-3">
