@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   Clock, AlertTriangle, ChevronDown, ExternalLink,
-  Shield, Building2, FileWarning, Landmark, ReceiptText, Files,
+  Shield, Building2, FileWarning, Landmark, ReceiptText, Files, Hospital, Pill,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -87,6 +87,67 @@ const SECTIONS: Section[] = [
           "Affected-patient and, where applicable, media notice obligations also apply. Use the HHS Part 2 breach portal/process.",
         ],
         sourceId: "part2_breach_notification",
+      },
+    ],
+  },
+  {
+    id: "hospital",
+    title: "Hospital-Specific Reporting",
+    description: "High-value clocks that can arise inside hospitals. These are separate from HIPAA breach timing and from nursing-home rules.",
+    icon: Hospital,
+    deadlines: [
+      {
+        timeframe: "Within 24 hours or one business day",
+        title: "New York Article 28 adverse event — NYPORTS",
+        scope: "N.Y. PHL §2805-l; 10 NYCRR §405.8 / §751.10",
+        actions: [
+          "Assess immediately whether the event falls within a NYPORTS reportable category; do not wait for the root-cause investigation to finish.",
+          "Designated Article 28 hospital/D&TC staff submit the initial adverse-event report through NYPORTS/HCS.",
+          "Preserve the clinical record, event details, staffing/assignment information, device/medication data, and other evidence needed for the follow-up investigation/root-cause analysis when required.",
+        ],
+        sourceId: "nyports_hospital_adverse_events",
+      },
+      {
+        timeframe: "Within 30 days of the statutory trigger",
+        title: "New York hospital — possible professional misconduct",
+        scope: "N.Y. Public Health Law §2803-e",
+        actions: [
+          "Covered Article 28 hospitals/facilities must report specified suspensions, restrictions, terminations, privilege actions, certain resignations/withdrawals, convictions, and information reasonably appearing to show physician professional misconduct within the statute's 30-day timeframe.",
+          "The recipient depends on the professional license: reports generally go to the Education Department, except physicians, physician assistants, and specialist assistants are reported to the Department of Health.",
+          "Calendar the reporting trigger separately from the completion of the internal peer-review, HR, compliance, or credentialing process.",
+        ],
+        sourceId: "ny_hospital_professional_misconduct",
+      },
+      {
+        timeframe: "Within 72 hours of the occurrence",
+        title: "EMTALA — recipient hospital suspects an improper unstable transfer",
+        scope: "42 CFR §489.20(m); CMS Appendix V guidance",
+        actions: [
+          "A recipient hospital that suspects it received an individual improperly transferred while unstable should report the incident to CMS or the State Survey Agency within 72 hours.",
+          "Preserve the ED log, MSE/stabilization record, transfer documents, acceptance/refusal communications, transfer-center recordings, on-call roster, and capacity information.",
+          "The reporting obligation is distinct from the final EMTALA merits determination.",
+        ],
+        sourceId: "emtala_recipient_hospital_reporting",
+      },
+    ],
+  },
+  {
+    id: "controlled-substances",
+    title: "Controlled Substances / Diversion",
+    description: "Hospital and pharmacy investigations can trigger federal DEA reporting before individual responsibility has been established.",
+    icon: Pill,
+    deadlines: [
+      {
+        timeframe: "Written notice to DEA within one business day of discovery",
+        title: "Theft or significant loss of controlled substances",
+        scope: "21 CFR §1301.74(c); DEA registrants",
+        actions: [
+          "A DEA registrant must notify the local DEA Field Division Office in writing within one business day after discovery of a theft or significant loss.",
+          "DEA must be notified directly; an internal corporate/security report does not substitute for direct DEA notice.",
+          "Document the theft/loss using DEA Form 106 and assess state pharmacy/law-enforcement/professional-reporting duties separately.",
+          "A medication discrepancy is not automatically a 'significant loss' or proof of diversion by a particular employee; investigate both the regulatory reporting question and individual responsibility.",
+        ],
+        sourceId: "dea_theft_significant_loss",
       },
     ],
   },
@@ -275,6 +336,8 @@ const SECTIONS: Section[] = [
 export default function RegulatoryTimelines() {
   const [open, setOpen] = useState<Record<string, boolean>>({
     hipaa: true,
+    hospital: true,
+    "controlled-substances": false,
     "ny-privacy": false,
     ltc: true,
     overpayment: false,
@@ -287,7 +350,7 @@ export default function RegulatoryTimelines() {
     <div className="max-w-4xl mx-auto space-y-4">
       <div>
         <div className="flex items-center gap-2 mb-1"><Clock className="w-5 h-5 text-primary" /><h2 className="text-lg font-bold text-foreground">Regulatory Deadlines & Timing Reference</h2></div>
-        <p className="text-xs text-muted-foreground">Current federal + New York timing most useful in healthcare compliance/privacy investigations. Every rule links to a governed source record with jurisdiction, status, verification date, and version history.</p>
+        <p className="text-xs text-muted-foreground">Current federal + New York timing most useful in hospital, privacy, billing, controlled-substance, and LTC investigations. Every rule links to a governed source record with jurisdiction, status, verification date, and version history.</p>
       </div>
 
       <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/5 p-4">
