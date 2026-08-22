@@ -1,8 +1,9 @@
 import type React from "react";
 import { useState } from "react";
-import { AnalysisResult } from "@/lib/types";
+import { AnalysisResult, HumanReviewRecord } from "@/lib/types";
 import { ClassificationSummary } from "@/components/ClassificationSummary";
 import { EvidenceTraceability } from "@/components/EvidenceTraceability";
+import { HumanReviewPanel } from "@/components/HumanReviewPanel";
 import { NotifyChecklist } from "@/components/NotifyChecklist";
 import {
   FileText, ListChecks, Briefcase, AlertTriangle,
@@ -38,7 +39,13 @@ function Section({
   );
 }
 
-export function AnalysisResults({ result }: { result: AnalysisResult }) {
+export function AnalysisResults({
+  result,
+  onHumanReviewChange,
+}: {
+  result: AnalysisResult;
+  onHumanReviewChange?: (review: HumanReviewRecord | undefined) => void;
+}) {
   return (
     <div className="space-y-3 fade-in">
       <ClassificationSummary classification={result} sources={result.sources} />
@@ -53,6 +60,10 @@ export function AnalysisResults({ result }: { result: AnalysisResult }) {
             policyQuestions={result.policyQuestions}
           />
         </Section>
+      )}
+
+      {onHumanReviewChange && (
+        <HumanReviewPanel result={result} onChange={onHumanReviewChange} />
       )}
 
       {result.missingInfo && result.missingInfo.length > 0 && (
