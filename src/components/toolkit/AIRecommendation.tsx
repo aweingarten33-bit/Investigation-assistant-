@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { callApi } from "@/lib/api";
 import { ClassificationSummary, Classification } from "@/components/ClassificationSummary";
 import { EvidenceTraceability } from "@/components/EvidenceTraceability";
+import { ExternalCaseResearch } from "@/components/ExternalCaseResearch";
 import { OrganizationDisciplineMatrix } from "@/components/OrganizationDisciplineMatrix";
 import { NotifyChecklist } from "@/components/NotifyChecklist";
 import { suggestLetterType, buildLetterPrefillFromClassification, letterButtonLabel } from "@/lib/letter-prefill";
@@ -42,6 +43,21 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
   const [showOrgContext, setShowOrgContext] = useState(false);
 
   const organizationContext = useMemo(() => buildOrganizationContext(organizationConfig), [organizationConfig]);
+  const researchSummary = useMemo(() => result ? JSON.stringify({
+    decision: result.decision,
+    riskLevel: result.riskLevel,
+    violationType: result.violationType,
+    findings: result.findings.map((finding) => ({
+      statement: finding.statement,
+      evidenceStatus: finding.evidenceStatus,
+      inference: finding.inference,
+    })),
+    disciplineFactors: result.disciplineFactors.map((factor) => ({
+      factor: factor.factor,
+      impact: factor.impact,
+      assessment: factor.assessment,
+    })),
+  }) : "", [result]);
 
   const analyze = async () => {
     const trimmed = caseFacts.trim();
@@ -93,7 +109,8 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
       </div>
       <p className="text-xs text-muted-foreground">
         Paste what your investigation found. The AI recommends a defensible finding and corrective-action range while showing
-        the actual evidence, contradictory evidence, and the reasoning it used so you can decide whether you agree.
+        the actual evidence, contradictory evidence, and the reasoning it used. It also runs live public research for current
+        government guidance and similar enforcement/organization cases so you are not relying on the model's memory alone.
       </p>
 
       <div className="rounded-lg border border-border overflow-hidden">
@@ -152,6 +169,12 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
         <div className="space-y-3">
           <ClassificationSummary classification={result} sources={sources} />
 
+          <ExternalCaseResearch
+            caseNotes={caseFacts}
+            analysisSummary={researchSummary}
+            initialSources={sources}
+          />
+
           {result.decision === "needs_more_info" && (
             <div className="flex items-start gap-2.5 px-4 py-3 bg-warning/10 border border-warning/30 rounded-lg">
               <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
@@ -188,7 +211,7 @@ export default function AIRecommendation({ onDraftLetter }: AIRecommendationProp
       )}
 
       <p className="text-[10px] text-muted-foreground">
-        AI recommendation and evidence analysis only. Verify the source excerpts and apply your actual policy, precedent, and HR/Legal review before serious employment action.
+        AI recommendation and evidence analysis only. Verify source excerpts and public analogs, and apply your actual policy, precedent, and HR/Legal review before serious employment action.
       </p>
     </div>
   );
