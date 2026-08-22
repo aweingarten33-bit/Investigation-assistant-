@@ -111,18 +111,28 @@ export default function Toolkit() {
   const active = SECTIONS[activeIndex];
 
   const NavList = ({ onSelect }: { onSelect: (id: SectionId) => void }) => (
-    <div className="rounded-2xl bg-background neu-raised overflow-hidden divide-y divide-border">
-      {SECTIONS.map((section) => {
-        const isActive = section.id === activeSection;
-        return (
-          <button
-            key={section.id}
-            onClick={() => onSelect(section.id)}
-            className={cn(
-              "w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors",
-              isActive ? "bg-primary/10" : "bg-card hover:bg-secondary/30 active:bg-secondary/30"
-            )}
-          >
+    <div>
+      <div className="flex items-center gap-3 px-1 mb-2 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-primary" /> AI-powered
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-border" /> Do it yourself
+        </span>
+      </div>
+      <div className="rounded-2xl bg-background neu-raised overflow-hidden divide-y divide-border">
+        {SECTIONS.map((section) => {
+          const isActive = section.id === activeSection;
+          return (
+            <button
+              key={section.id}
+              onClick={() => onSelect(section.id)}
+              className={cn(
+                "w-full flex items-center gap-3 pl-3 pr-4 py-3.5 text-left transition-colors border-l-4",
+                section.isAI ? "border-l-primary" : "border-l-transparent",
+                isActive ? "bg-primary/10" : "bg-card hover:bg-secondary/30 active:bg-secondary/30"
+              )}
+            >
             <SectionIcon section={section} active={isActive} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
@@ -134,10 +144,11 @@ export default function Toolkit() {
                 )}
               </div>
               <p className="text-[11px] text-muted-foreground truncate">{section.description}</p>
-            </div>
-          </button>
-        );
-      })}
+              </div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 
