@@ -4,9 +4,9 @@ A React/Vite + Node/Express application for organizing healthcare compliance/pri
 
 This is intentionally **decision support, not an automated employment decision-maker**.
 
-## What changed from the original Investigation Assistant
+## Core workflow
 
-The product is no longer centered on "paste notes → AI writes a report." The core workflow is now:
+The product is no longer centered on "paste notes → AI writes a report." The workflow is now:
 
 1. **Investigation notes** are pasted or extracted from `.docx`.
 2. The server converts the notes into immutable numbered lines (`[L0001]`, `[L0002]`, ...).
@@ -15,7 +15,8 @@ The product is no longer centered on "paste notes → AI writes a report." The c
 5. Findings link to supporting and contradicting evidence IDs.
 6. The engine separately evaluates compliance/regulatory risk and the factors relevant to corrective action.
 7. Corrective action is presented as a **minimum → recommended-for-review → maximum range**, with organization-specific open questions where policy/precedent/CBA facts are missing.
-8. The report and Word export include an **Evidence Traceability Appendix**.
+8. A human reviewer can explicitly **approve, approve with changes, reject, or defer** the AI decision support and record the actual final finding/action and rationale.
+9. The report and Word export include an **Evidence Traceability Appendix** and the saved human-review disposition when one has been recorded.
 
 ## Evidence traceability
 
@@ -29,7 +30,22 @@ Each traceable finding includes:
 - source label and exact line range;
 - the exact excerpt reconstructed by the server from the submitted notes.
 
-Invalid or out-of-range evidence IDs/line references are filtered/clamped server-side before results are returned.
+Invalid evidence IDs are removed and out-of-range model line references are clamped server-side before results are returned. Evidence status is recalculated after that validation, so a model cannot obtain a "corroborated" label merely by inventing source IDs.
+
+## Human review record
+
+The main report result includes a **Human Review Record**. A reviewer can record:
+
+- reviewer name and role;
+- disposition (`approve`, `approve with changes`, `need more information`, or `reject AI recommendation`);
+- final human finding;
+- final corrective/employment action or other disposition;
+- human rationale / override explanation;
+- review timestamp.
+
+When saved, that human decision is carried into the Word export and downstream letter handoff ahead of the AI recommendation. If no human review has been saved, exports and letter handoffs explicitly state that the AI action range is **not an authorized final employment decision**.
+
+This is still a client-side case result, not an immutable enterprise audit trail. A production case-management version would persist signed reviewer actions, case versions, assignments, and audit events server-side.
 
 ## Corrective-action / discipline design
 
@@ -58,7 +74,7 @@ The AI is instructed to evaluate, when evidence exists:
 
 Users can optionally paste **organization-specific discipline context** such as policy language, a disciplinary matrix, anonymized precedent, HR rules, CBA requirements, or approval thresholds. That information is treated as decision criteria, **not case evidence**. If material organization-specific information is missing, the model is expected to mark the recommendation policy-dependent and identify the questions that must be resolved.
 
-The manual Decision Framework follows the same philosophy and no longer automatically derives a discipline level from intent or a factor count.
+The manual Decision Framework follows the same philosophy and no longer automatically derives a discipline level from intent, incident count, risk level, or a factor score.
 
 ## Privacy model
 
@@ -66,12 +82,15 @@ This demo does **not** persist reports in a database or browser storage. Investi
 
 ### Search privacy boundary
 
-Current regulatory context is gathered in a separate process:
+Current regulatory context is gathered through a deliberately constrained two-stage process:
 
-1. The normal non-search AI call receives case text and extracts a short **generic violation taxonomy**.
-2. Only that generic taxonomy is sent to the provider's web-search capability.
-3. The raw case notes are **not sent to the search-enabled call**.
-4. Search results are labeled **"Current regulatory context consulted"**, not "proof" of the case finding or disciplinary recommendation.
+1. A normal **non-search structured AI call** sees the case text and may select exactly one value from a closed regulatory taxonomy such as `hipaa_unauthorized_access`, `overpayment`, `anti_kickback`, or `patient_safety`.
+2. The server maps that enum to a **server-owned generic research string** from `server/lib/research-taxonomy.js`.
+3. Only that fixed server-owned generic string is sent to the provider's web-search capability.
+4. The raw case notes and any free-text model output are **not sent to the search-enabled call**.
+5. Search results are labeled **"Current regulatory context consulted"**, not "proof" of the case finding or disciplinary recommendation.
+
+Because the search text comes from a closed server-owned map, a taxonomy model cannot smuggle a name, employer, date, patient identifier, or prompt-injected string into web search through this path.
 
 Search context is background only and may never be treated as case evidence.
 
@@ -85,6 +104,7 @@ Search context is background only and may never be treated as case evidence.
 - The signature is bound to a SHA-256 hash of **both the exact investigation notes and organization-specific context**. Changing either between classification and report generation forces a re-classification.
 - Client cancellation uses `AbortController`, so cancelling an analysis actually aborts the HTTP request instead of merely ignoring a late response.
 - The report prompt is required to preserve material contradictory evidence and avoid stock regulatory citations when applicability is uncertain.
+- Letter generation treats case details as untrusted data and cannot turn "consider termination" or an AI action range into a final termination decision unless an authorized final decision is actually supplied.
 
 ## Regulatory reference library
 
@@ -106,6 +126,7 @@ Production is one Node process/origin:
 - **AI abstraction:** `server/lib/ai.js`
 - **Providers:** Anthropic, OpenAI, Gemini
 - **Evidence utilities:** `server/lib/investigation-utils.js`
+- **Closed regulatory taxonomy:** `server/lib/research-taxonomy.js`
 - **Main investigation route:** `server/routes/analyze-report.js`
 - **Letter generator route:** `server/routes/investigation-toolkit.js`
 
@@ -147,16 +168,18 @@ The `/toolkit` route includes:
 - **Investigation Guide**
 - **Conflict of Interest**
 - **Interview Templates**
-- **AI Investigation Decision Support** with evidence traceability
+- **AI Evidence & Decision Support** with evidence traceability
 - **Manual Decision Framework** with independent factor review
 - **Regulatory Deadlines** with scoped primary-source references
 - **AI Letter Generator**
+
+The full report workflow additionally includes the **Human Review Record** described above.
 
 ## Tests / CI
 
 The placeholder `expect(true).toBe(true)` test has been removed.
 
-Regression tests cover evidence/integrity utilities including:
+Regression tests now cover:
 
 - stable line numbering;
 - exact excerpt reconstruction;
@@ -165,19 +188,22 @@ Regression tests cover evidence/integrity utilities including:
 - contradiction handling;
 - clamping invalid model line offsets;
 - corroboration status rules;
-- discipline-factor evidence references.
+- discipline-factor evidence references;
+- closed regulatory taxonomy mapping;
+- rejection of arbitrary/free-text values as search topics.
 
-GitHub Actions runs:
+CI is configured to run:
 
 ```sh
 npm ci
+npm run check:server
 npm test
 npm run build
 npm run lint
 ```
 
-on pull requests and pushes to `main`.
+on pull requests and pushes to `main`. `check:server` uses `node --check` against the Express routes and server libraries so backend syntax is verified separately from the Vite frontend build.
 
 ## Production-readiness warning
 
-This repository is a strong demo / decision-support prototype, not a turn-key HIPAA enterprise case-management system. Real PHI/PII production use still requires, at minimum, appropriate contractual arrangements with providers/hosting vendors, authentication and authorization, audit logging, retention/deletion controls, incident response, access reviews, environment hardening, and organization-specific legal/privacy/security assessment.
+This repository is a strong demo / decision-support prototype, not a turn-key HIPAA enterprise case-management system. Real PHI/PII production use still requires, at minimum, appropriate contractual arrangements with providers/hosting vendors, authentication and authorization, persistent audit logging, retention/deletion controls, incident response, access reviews, environment hardening, organization-specific legal/privacy/security assessment, and a validated model-evaluation program.
