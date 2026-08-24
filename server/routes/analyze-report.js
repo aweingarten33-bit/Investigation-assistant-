@@ -12,7 +12,11 @@ import {
 import { RESEARCH_CATEGORIES, topicForCategory } from "../lib/research-taxonomy.js";
 
 const MAX_REPORT_TEXT_LENGTH = 100_000;
-const MAX_ORG_CONTEXT_LENGTH = 20_000;
+// 20,000 was tight for a real pasted organization policy document (the
+// investigation-process policy alone can run 15-16K characters) plus the
+// other discipline-matrix fields (standard of proof, action matrix,
+// precedent, CBA rules, etc.) sharing the same budget.
+const MAX_ORG_CONTEXT_LENGTH = 40_000;
 // The step="report" request echoes the full classification (evidenceItems,
 // findings, hypotheses, sufficiency checks, discipline factors, etc.) back from
 // the client. Budget above the schema-valid worst case so a thorough case does

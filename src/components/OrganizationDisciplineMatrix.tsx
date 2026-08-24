@@ -1,6 +1,7 @@
-import { Building2, ShieldQuestion } from "lucide-react";
+import { Building2, FileText, ShieldQuestion } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import type { OrganizationDisciplineConfig } from "@/lib/organization-context";
+import { SAMPLE_ORG_POLICY_TEXT } from "@/lib/sample-org-policy";
 
 const FIELDS: Array<{
   key: keyof OrganizationDisciplineConfig;
@@ -79,8 +80,17 @@ export function OrganizationDisciplineMatrix({
     <div className="space-y-3">
       <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
         <Building2 className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-        <div>
-          <p className="text-xs font-semibold text-foreground">Organization-configurable discipline matrix</p>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2 flex-wrap">
+            <p className="text-xs font-semibold text-foreground">Organization-configurable discipline matrix</p>
+            <button
+              type="button"
+              onClick={() => onChange({ ...config, policyRules: SAMPLE_ORG_POLICY_TEXT })}
+              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary text-primary-foreground text-[10px] font-bold hover:bg-primary/90 transition-colors"
+            >
+              <FileText className="h-3 w-3" /> Load my org policy
+            </button>
+          </div>
           <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
             These fields control the organization-specific decision criteria sent with the case. They are not treated as case evidence, and the AI must defer when the applicable policy, precedent, CBA, or approvals are missing.
           </p>

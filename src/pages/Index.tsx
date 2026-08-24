@@ -30,7 +30,7 @@ GlobalWorkerOptions.workerSrc = pdfWorker;
 
 const MIN_REPORT_LENGTH = 50;
 const MAX_REPORT_LENGTH = 100_000;
-const MAX_ORG_CONTEXT = 20_000;
+const MAX_ORG_CONTEXT = 40_000;
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 const MAX_UPLOAD_FILES = 12;
 const ANALYSIS_VERSION = "investigation-assistant-personal-v3";

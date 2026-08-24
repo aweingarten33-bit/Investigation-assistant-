@@ -23,7 +23,7 @@ import { Source } from "@/lib/types";
 
 const MIN_LENGTH = 50;
 const MAX_LENGTH = 100_000;
-const MAX_ORG_CONTEXT = 20_000;
+const MAX_ORG_CONTEXT = 40_000;
 
 interface ClassifyResponse extends Classification {
   missingElements: string[];
