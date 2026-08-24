@@ -105,6 +105,7 @@ const PHASES: Phase[] = [
       {
         title: "Set a working timeline",
         bullets: [
+          "Many compliance programs set an internal target to begin an investigation within a few business days of receiving a report — see Regulatory Deadlines for a worked example and why it's an internal target, not a legal deadline.",
           "Use internal target dates for evidence collection, interviews, analysis, report, and corrective action, but do not confuse those targets with legal deadlines.",
           "If a case takes longer than planned, document why and whether interim safeguards remain necessary.",
         ],
@@ -172,6 +173,7 @@ const PHASES: Phase[] = [
           "State truthfulness/cooperation and anti-retaliation expectations consistent with policy.",
           "Do not promise absolute confidentiality and do not give an instruction that unlawfully restricts protected reporting or consultation rights.",
           "If Legal directs an Upjohn-type warning, use the approved script rather than improvising it.",
+          "You can ask a non-essential person present (e.g. a union representative not needed for that portion) to step out if their presence threatens the integrity of the interview or would require disclosing PHI/confidential business information beyond what's necessary.",
         ],
       },
       {
@@ -242,11 +244,11 @@ const PHASES: Phase[] = [
       {
         title: "Use a clear report structure",
         bullets: [
-          "Scope/allegations and how the matter was received.",
-          "Investigative steps and evidence reviewed.",
-          "Findings by allegation, including material contradictory evidence and limitations.",
+          "Nature of the problem and how the matter was received.",
+          "A list of all known facts, plus the investigative steps and evidence reviewed.",
+          "Findings by allegation, including material contradictory evidence, limitations, and — where warranted for corrective action — the person(s) or process(es) that contributed, and whether that contribution looks deliberate, reckless, or merely an isolated error.",
           "Applicable policies/regulations and analysis.",
-          "Corrective actions, process fixes, reporting obligations, and unresolved items.",
+          "Corrective actions, process fixes, reporting obligations, and unresolved items; if an overpayment may be involved, loop in Finance for an estimate of scope before you finalize the number.",
         ],
       },
       {
@@ -261,7 +263,7 @@ const PHASES: Phase[] = [
         title: "Handle external reporting separately from the internal report",
         bullets: [
           "Determine what must be reported, to whom, by when, and in what form. The deadline may arise before the internal report is complete.",
-          "Examples can include HHS/OCR, NYSDOH/NYPORTS, CMS/State Survey Agency, DEA, professional disciplinary agencies, payers, law enforcement, or self-disclosure channels depending on the case.",
+          "Examples can include HHS/OCR, NYSDOH/NYPORTS, CMS/State Survey Agency, NYS Office of the Medicaid Inspector General (OMIG), NYS Attorney General, NYS Office of Mental Health, NYS Education Department, NYS Office of Professional Medical Conduct, DEA, DOJ, law enforcement, managed care organizations/private payers, or self-disclosure channels depending on the case.",
           "Verify the source rule each time; do not rely on remembered timing for high-stakes filings.",
         ],
       },
@@ -287,8 +289,9 @@ const PHASES: Phase[] = [
         title: "Close the investigative record deliberately",
         bullets: [
           "Record the final status of each allegation, outstanding reporting, corrective-action owners, and any follow-up monitoring.",
-          "Retain the record according to the applicable investigation, legal, compliance, medical-staff, quality, privacy, or records-retention policy.",
+          "Retain the record according to the applicable investigation, legal, compliance, medical-staff, quality, privacy, or records-retention policy — a common internal baseline is a minimum 10-year retention period, see Regulatory Deadlines.",
           "Reporter/subject communications should follow policy and confidentiality limits; do not disclose personnel details merely because a reporter asks for the outcome.",
+          "Feed a summary of the report and outcome into your organization's periodic Compliance Committee / Board of Trustees reporting cadence, not just this one case file.",
         ],
       },
       {

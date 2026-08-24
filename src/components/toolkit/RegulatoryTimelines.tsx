@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   Clock, AlertTriangle, ChevronDown, ExternalLink,
-  Shield, Building2, FileWarning, Landmark, ReceiptText, Files, Hospital, Pill,
+  Shield, Building2, FileWarning, Landmark, ReceiptText, Files, Hospital, Pill, Megaphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -312,6 +312,37 @@ const SECTIONS: Section[] = [
     ],
   },
   {
+    id: "compliance-program",
+    title: "Compliance Program & Whistleblower Protection",
+    description: "The obligations behind the investigation itself: the compliance program mandate that requires you to investigate, and the retaliation protections owed to whoever reported the concern.",
+    icon: Megaphone,
+    deadlines: [
+      {
+        timeframe: "Ongoing — annual December certification",
+        title: "Required Medicaid provider compliance program",
+        scope: "New York required Medicaid providers",
+        actions: [
+          "A required provider's compliance program must cover billings, payments, medical necessity/quality of care, governance, mandatory reporting, credentialing, and other risk areas identified with due diligence.",
+          "Certify to OMIG annually every December that a compliant program is in place, using OMIG's certification form.",
+          "This is the underlying duty that makes 'we investigate known or suspected non-compliance' a regulatory requirement, not just good practice — cite the current §521-1.3, not a pre-2023 §521.3 reference.",
+        ],
+        sourceId: "ny_omig_compliance_program",
+      },
+      {
+        timeframe: "No fixed clock — protection attaches to the protected activity",
+        title: "Whistleblower / anti-retaliation protection",
+        scope: "§740 — all NY employers; §741 — health care employees specifically",
+        actions: [
+          "§741 protects a health care employee who discloses, threatens to disclose, objects to, or refuses to participate in an activity, policy, or practice that may constitute improper quality of patient care.",
+          "§740 covers disclosure of a law/rule/regulation violation presenting a substantial and specific danger to public health or safety, or health care fraud.",
+          "Tell participants up front that retaliation is prohibited — don't let that be an afterthought once a complaint is already filed.",
+          "A 2025 amendment extended the civil-action statute of limitations from 1 to 2 years and added a jury-trial right; verify current procedural detail before advising on a specific claim.",
+        ],
+        sourceId: "ny_labor_law_whistleblower",
+      },
+    ],
+  },
+  {
     id: "internal",
     title: "Internal Investigation Targets",
     description: "Internal service levels are useful, but do not turn them into fake legal deadlines. Regulatory, payer, contractual, accreditor, and preservation duties control when applicable.",
@@ -329,6 +360,28 @@ const SECTIONS: Section[] = [
         ],
         sourceId: "oig_gcpg",
       },
+      {
+        timeframe: "Example: commence within 3 business days",
+        title: "Investigation commencement target (absent imminent threat)",
+        scope: "Common internal-policy example — set your own, do not treat this number as legally required",
+        actions: [
+          "Many compliance programs set an internal target to begin an investigation within a few business days of receiving a report, escalating faster for imminent threats.",
+          "There is no universal statute of limitations on investigating known or suspected non-compliance — but the applicability of the facts and any external reporting clock still bear on how quickly you need to move.",
+          "Document the date the report was received, the date the investigation actually began, and the reason for any gap.",
+        ],
+        sourceId: "oig_gcpg",
+      },
+      {
+        timeframe: "Example: minimum 10 years",
+        title: "Investigation record retention target",
+        scope: "Common internal-policy example — verify against your own records-retention schedule and applicable law",
+        actions: [
+          "Retain the initial report, investigation plan, interview notes and statements, key documents/recordings, the Summary Investigative Report, and any resulting discipline/corrective-action records together.",
+          "A common internal baseline is a minimum 10-year retention period for investigation records — but state, payer, and licensure rules can require longer for specific record types.",
+          "Where a hard copy lives outside your compliance tracking system, document its specific location in the system.",
+        ],
+        sourceId: "oig_gcpg",
+      },
     ],
   },
 ];
@@ -343,6 +396,7 @@ export default function RegulatoryTimelines() {
     overpayment: false,
     access: false,
     "security-nprm": false,
+    "compliance-program": false,
     internal: false,
   });
 
