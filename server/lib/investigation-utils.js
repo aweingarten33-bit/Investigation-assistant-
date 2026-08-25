@@ -1,7 +1,15 @@
 import { createHash } from "node:crypto";
 
+// 20,000 was tight for a real pasted organization policy document (the
+// investigation-process policy alone can run 15-16K characters) plus the
+// other discipline-matrix fields (standard of proof, action matrix,
+// precedent, CBA rules, etc.) sharing the same budget. This is the single
+// canonical limit — the route's request-size validation must use this same
+// constant rather than a second hardcoded number that can drift out of sync.
+export const MAX_ORG_CONTEXT_LENGTH = 40_000;
+
 export function normalizeOrganizationContext(value) {
-  return typeof value === "string" ? value.trim().slice(0, 20_000) : "";
+  return typeof value === "string" ? value.trim().slice(0, MAX_ORG_CONTEXT_LENGTH) : "";
 }
 
 export function splitReportLines(reportText) {
@@ -138,16 +146,22 @@ export function hydrateEvidenceTraceability(classification, reportText) {
     });
 
   const validEvidenceIds = new Set(evidenceItems.map((item) => item.id));
+  const sourceLabelById = new Map(evidenceItems.map((item) => [item.id, item.sourceLabel]));
   const findings = (classification.findings || []).map((finding, index) => {
     const supportingEvidenceIds = (finding.supportingEvidenceIds || []).filter((id) => validEvidenceIds.has(id));
     const contradictingEvidenceIds = (finding.contradictingEvidenceIds || []).filter((id) => validEvidenceIds.has(id));
 
-    let evidenceStatus = finding.evidenceStatus;
+    // "Corroborated" requires two independent SOURCES, not merely two cited
+    // evidence IDs. Two excerpts that both happen to carry the same
+    // sourceLabel (e.g. two lines from the same person's own statement) are
+    // still a single source and must not silently read as corroborated.
+    const distinctSupportingSources = new Set(supportingEvidenceIds.map((id) => sourceLabelById.get(id)));
+
+    let evidenceStatus;
     if (supportingEvidenceIds.length === 0 && contradictingEvidenceIds.length === 0) evidenceStatus = "insufficient";
-    else if (supportingEvidenceIds.length === 0 && contradictingEvidenceIds.length > 0) evidenceStatus = "contradicted";
-    else if (supportingEvidenceIds.length >= 2 && contradictingEvidenceIds.length === 0) evidenceStatus = "corroborated";
-    else if (supportingEvidenceIds.length > 0 && contradictingEvidenceIds.length > 0) evidenceStatus = "contradicted";
-    else if (supportingEvidenceIds.length === 1 && contradictingEvidenceIds.length === 0) evidenceStatus = "single_source";
+    else if (contradictingEvidenceIds.length > 0) evidenceStatus = "contradicted";
+    else if (distinctSupportingSources.size >= 2) evidenceStatus = "corroborated";
+    else evidenceStatus = "single_source";
 
     return {
       ...finding,
@@ -194,6 +208,41 @@ export function hydrateEvidenceTraceability(classification, reportText) {
     evidenceIds: (factor.evidenceIds || []).filter((id) => validEvidenceIds.has(id)),
   }));
 
-  const hydrated = { ...classification, evidenceItems, findings, hypotheses, disciplineFactors };
+  // A sufficiency check's "satisfied" status is only as good as the evidence
+  // it was based on. If hydration just invalidated every piece of evidence a
+  // check cited, the check must not keep silently reading as satisfied — it
+  // gets deterministically reopened as material/resolvable so the closure
+  // gate (which reads only these checks) actually notices.
+  const sufficiencyChecks = (classification.sufficiencyChecks || []).map((check) => {
+    const citedIds = check.evidenceIds || [];
+    const evidenceIds = citedIds.filter((id) => validEvidenceIds.has(id));
+    const lostAllCitedEvidence = citedIds.length > 0 && evidenceIds.length === 0;
+
+    if (check.status === "satisfied" && lostAllCitedEvidence) {
+      return {
+        ...check,
+        evidenceIds,
+        status: "unresolved",
+        material: true,
+        resolvable: true,
+        rationale: `${check.rationale} (Reopened: the evidence this check relied on failed validation and no longer supports it.)`,
+      };
+    }
+    return { ...check, evidenceIds };
+  });
+
+  const hydrated = { ...classification, evidenceItems, findings, hypotheses, disciplineFactors, sufficiencyChecks };
   return { ...hydrated, closureAssessment: deriveClosureAssessment(hydrated) };
+}
+
+// Report statements must stand on findings that actually survived
+// validation. Strips any investigationFindings entry whose supportingFindingIds
+// contains no id from the hydrated classification's findings — the same
+// "strip, don't repair" posture as evidence citations above, applied one
+// level up so an unsupported report sentence never reaches the reader.
+export function groundReportFindings(investigationFindings, classification) {
+  const validFindingIds = new Set((classification.findings || []).map((finding) => finding.id));
+  return (investigationFindings || [])
+    .filter((item) => (item.supportingFindingIds || []).some((id) => validFindingIds.has(id)))
+    .map((item) => item.statement);
 }

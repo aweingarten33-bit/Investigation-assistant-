@@ -28,7 +28,7 @@ const riskStyles: Record<RiskLevel, string> = {
 
 export type Classification = Pick<
   AnalysisResult,
-  "decision" | "confidenceScore" | "riskLevel" | "violationType" | "violationCount" |
+  "decision" | "riskLevel" | "violationType" | "violationCount" |
   "recommendationTier" | "aggravatingFactors" | "mitigatingFactors" | "notesCompleteness" |
   "evidenceItems" | "findings" | "disciplineFactors" | "disciplineRange" | "policyQuestions" |
   "closureAssessment"
@@ -52,9 +52,6 @@ export function ClassificationSummary({ classification, sources }: { classificat
         </span>
         <span className={`inline-block rounded-md border border-border px-4 py-2 text-sm font-bold ${riskStyles[c.riskLevel]}`}>
           {c.riskLevel.toUpperCase()} RISK
-        </span>
-        <span className="inline-block rounded-md border border-border px-4 py-2 text-sm font-medium text-muted-foreground">
-          Confidence: {c.confidenceScore}%
         </span>
       </div>
 

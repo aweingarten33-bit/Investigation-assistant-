@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   buildInputHash,
   deriveClosureAssessment,
+  groundReportFindings,
   hydrateEvidenceTraceability,
+  MAX_ORG_CONTEXT_LENGTH,
+  normalizeOrganizationContext,
   numberReportLines,
   splitReportLines,
 } from "./investigation-utils.js";
@@ -126,6 +129,62 @@ describe("investigation evidence utilities", () => {
     expect(result.findings[0].evidenceStatus).toBe("corroborated");
   });
 
+  it("does not treat two excerpts from the same source as corroboration", () => {
+    const result = hydrateEvidenceTraceability(baseClassification({
+      evidenceItems: [
+        { id: "E1", sourceLabel: "Employee A interview", lineStart: 1, lineEnd: 1, evidenceType: "interview", stance: "supports", summary: "Employee A's own account, part one" },
+        { id: "E2", sourceLabel: "Employee A interview", lineStart: 2, lineEnd: 2, evidenceType: "interview", stance: "supports", summary: "Employee A's own account, part two" },
+      ],
+      findings: [
+        { id: "F1", statement: "Finding", inference: "Inference", evidenceStatus: "supported", supportingEvidenceIds: ["E1", "E2"], contradictingEvidenceIds: [] },
+      ],
+    }), "Employee A's own account, part one\nEmployee A's own account, part two");
+
+    expect(result.findings[0].evidenceStatus).toBe("single_source");
+  });
+
+  it("reopens a satisfied sufficiency check when the evidence it cited fails validation", () => {
+    const result = hydrateEvidenceTraceability(baseClassification({
+      evidenceItems: [
+        { id: "E1", sourceLabel: "Audit", lineStart: 1, lineEnd: 1, evidenceType: "audit", stance: "supports", summary: "Audit record" },
+      ],
+      sufficiencyChecks: [{
+        id: "finding_support",
+        status: "satisfied",
+        material: true,
+        resolvable: false,
+        rationale: "The audit record establishes the finding.",
+        nextAction: "",
+        evidenceIds: ["E1", "E999"],
+      }],
+    }), "Audit record");
+
+    // E999 was never real; E1 alone survives. The check should still stand.
+    expect(result.sufficiencyChecks[0].evidenceIds).toEqual(["E1"]);
+    expect(result.sufficiencyChecks[0].status).toBe("satisfied");
+  });
+
+  it("reopens a satisfied sufficiency check when every evidence ID it cited is invalid", () => {
+    const result = hydrateEvidenceTraceability(baseClassification({
+      evidenceItems: [],
+      sufficiencyChecks: [{
+        id: "finding_support",
+        status: "satisfied",
+        material: false,
+        resolvable: false,
+        rationale: "The audit record establishes the finding.",
+        nextAction: "",
+        evidenceIds: ["E1"],
+      }],
+    }), "Audit record");
+
+    expect(result.sufficiencyChecks[0].status).toBe("unresolved");
+    expect(result.sufficiencyChecks[0].material).toBe(true);
+    expect(result.sufficiencyChecks[0].resolvable).toBe(true);
+    expect(result.sufficiencyChecks[0].evidenceIds).toEqual([]);
+    expect(deriveClosureAssessment(result).status).toBe("not_ready_to_close");
+  });
+
   it("preserves unknown discipline factors but strips invalid evidence IDs", () => {
     const result = hydrateEvidenceTraceability(baseClassification({
       evidenceItems: [
@@ -239,5 +298,45 @@ describe("deterministic closure gate", () => {
     }));
 
     expect(result.status).toBe("not_ready_to_close");
+  });
+});
+
+describe("report finding grounding", () => {
+  it("keeps a report statement grounded in a real finding id", () => {
+    const classification = baseClassification({
+      findings: [{ id: "F1", statement: "Access occurred.", inference: "", evidenceStatus: "corroborated", supportingEvidenceIds: [], contradictingEvidenceIds: [] }],
+    });
+    const result = groundReportFindings(
+      [{ statement: "Employee A accessed the record.", supportingFindingIds: ["F1"] }],
+      classification,
+    );
+    expect(result).toEqual(["Employee A accessed the record."]);
+  });
+
+  it("drops a report statement that cites no real finding id", () => {
+    const classification = baseClassification({
+      findings: [{ id: "F1", statement: "Access occurred.", inference: "", evidenceStatus: "corroborated", supportingEvidenceIds: [], contradictingEvidenceIds: [] }],
+    });
+    const result = groundReportFindings(
+      [
+        { statement: "Employee A accessed the record.", supportingFindingIds: ["F1"] },
+        { statement: "Invented statement with no grounding.", supportingFindingIds: ["F999"] },
+      ],
+      classification,
+    );
+    expect(result).toEqual(["Employee A accessed the record."]);
+  });
+});
+
+describe("organization context normalization", () => {
+  it("truncates at the canonical limit instead of a smaller, independently-hardcoded number", () => {
+    const oversized = "x".repeat(MAX_ORG_CONTEXT_LENGTH + 5_000);
+    const normalized = normalizeOrganizationContext(oversized);
+    expect(normalized.length).toBe(MAX_ORG_CONTEXT_LENGTH);
+  });
+
+  it("keeps content between the old 20K limit and the current 40K limit instead of silently dropping it", () => {
+    const notQuiteOversized = "y".repeat(MAX_ORG_CONTEXT_LENGTH - 100);
+    expect(normalizeOrganizationContext(notQuiteOversized).length).toBe(MAX_ORG_CONTEXT_LENGTH - 100);
   });
 });

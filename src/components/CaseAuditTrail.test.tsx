@@ -6,7 +6,6 @@ import type { AnalysisResult } from "@/lib/types";
 function result(): AnalysisResult {
   return {
     decision: "substantiated",
-    confidenceScore: 80,
     riskLevel: "high",
     violationType: "privacy",
     violationCount: "1",

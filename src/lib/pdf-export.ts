@@ -69,7 +69,7 @@ export function exportToPdf(result: AnalysisResult) {
 
   // Classification line
   const decisionLabel = result.decision === "needs_more_info" ? "NEEDS MORE INFO" : result.decision.toUpperCase();
-  doc.text(`Decision: ${decisionLabel}  |  Risk: ${result.riskLevel.toUpperCase()}  |  Confidence: ${result.confidenceScore}%`, margin, y);
+  doc.text(`Decision: ${decisionLabel}  |  Risk: ${result.riskLevel.toUpperCase()}`, margin, y);
   y += 10;
 
   // Divider

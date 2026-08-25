@@ -6,17 +6,14 @@ import { createRateLimiter, clientIp } from "../lib/rate-limit.js";
 import {
   buildInputHash,
   hydrateEvidenceTraceability,
+  groundReportFindings,
+  MAX_ORG_CONTEXT_LENGTH,
   normalizeOrganizationContext,
   numberReportLines,
 } from "../lib/investigation-utils.js";
 import { RESEARCH_CATEGORIES, topicForCategory } from "../lib/research-taxonomy.js";
 
 const MAX_REPORT_TEXT_LENGTH = 100_000;
-// 20,000 was tight for a real pasted organization policy document (the
-// investigation-process policy alone can run 15-16K characters) plus the
-// other discipline-matrix fields (standard of proof, action matrix,
-// precedent, CBA rules, etc.) sharing the same budget.
-const MAX_ORG_CONTEXT_LENGTH = 40_000;
 // The step="report" request echoes the full classification (evidenceItems,
 // findings, hypotheses, sufficiency checks, discipline factors, etc.) back from
 // the client. Budget above the schema-valid worst case so a thorough case does
@@ -110,8 +107,9 @@ const sufficiencyCheckSchema = {
     resolvable: { type: "boolean" },
     rationale: { type: "string" },
     nextAction: { type: "string" },
+    evidenceIds: { type: "array", items: { type: "string" } },
   },
-  required: ["id", "status", "material", "resolvable", "rationale", "nextAction"],
+  required: ["id", "status", "material", "resolvable", "rationale", "nextAction", "evidenceIds"],
 };
 
 const conclusionChangeFactorSchema = {
@@ -140,7 +138,6 @@ const classificationSchema = {
   properties: {
     decision: { type: "string", enum: VALID_DECISIONS },
     riskLevel: { type: "string", enum: VALID_RISK },
-    confidenceScore: { type: "integer" },
     violationType: { type: "string" },
     violationCount: { type: "string" },
     recommendationTier: { type: "string", enum: VALID_TIERS },
@@ -170,7 +167,7 @@ const classificationSchema = {
     policyQuestions: { type: "array", items: { type: "string" } },
   },
   required: [
-    "decision", "riskLevel", "confidenceScore", "violationType", "violationCount", "recommendationTier",
+    "decision", "riskLevel", "violationType", "violationCount", "recommendationTier",
     "aggravatingFactors", "mitigatingFactors", "notesCompleteness", "missingElements", "evidenceItems",
     "findings", "hypotheses", "sufficiencyChecks", "closureRationale", "whatWouldChangeConclusion",
     "disciplineFactors", "disciplineRange", "policyQuestions",
@@ -183,7 +180,17 @@ const reportSchema = {
     introduction: { type: "string" },
     incidentOverview: { type: "string" },
     incidentDetails: { type: "string" },
-    investigationFindings: { type: "array", items: { type: "string" } },
+    investigationFindings: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          statement: { type: "string" },
+          supportingFindingIds: { type: "array", items: { type: "string" } },
+        },
+        required: ["statement", "supportingFindingIds"],
+      },
+    },
     regulationsCited: { type: "array", items: { type: "string" } },
     recommendations: { type: "string" },
     conclusion: { type: "string" },
@@ -231,6 +238,7 @@ const SufficiencyCheckZ = z.object({
   resolvable: z.boolean(),
   rationale: z.string().min(1).max(2000),
   nextAction: z.string().max(1500),
+  evidenceIds: z.array(z.string().max(80)).max(50),
 });
 const ConclusionChangeFactorZ = z.object({
   description: z.string().min(1).max(1500),
@@ -246,7 +254,6 @@ const DisciplineFactorZ = z.object({
 const ClassificationZ = z.object({
   decision: z.enum(VALID_DECISIONS),
   riskLevel: z.enum(VALID_RISK),
-  confidenceScore: z.coerce.number().int().min(0).max(100),
   violationType: z.string().max(500),
   violationCount: z.string().max(200),
   recommendationTier: z.enum(VALID_TIERS),
@@ -256,7 +263,7 @@ const ClassificationZ = z.object({
   missingElements: z.array(z.string().max(1000)).max(30),
   evidenceItems: z.array(EvidenceZ).max(100),
   findings: z.array(FindingZ).max(50),
-  hypotheses: z.array(HypothesisZ).min(2).max(6),
+  hypotheses: z.array(HypothesisZ).min(1).max(6),
   sufficiencyChecks: z.array(SufficiencyCheckZ).min(8).max(8).refine(
     (checks) => new Set(checks.map((check) => check.id)).size === SUFFICIENCY_CHECK_IDS.length,
     "Every investigation sufficiency check must be returned exactly once",
@@ -278,7 +285,10 @@ const ReportZ = z.object({
   introduction: z.string(),
   incidentOverview: z.string(),
   incidentDetails: z.string(),
-  investigationFindings: z.array(z.string()),
+  investigationFindings: z.array(z.object({
+    statement: z.string().min(1).max(2000),
+    supportingFindingIds: z.array(z.string().max(80)).max(20),
+  })),
   regulationsCited: z.array(z.string()),
   recommendations: z.string(),
   conclusion: z.string(),
@@ -325,8 +335,8 @@ ABSOLUTE EVIDENCE RULES:
 - Regulatory research and organization-specific rules are CONTEXT, never case facts.
 
 HYPOTHESIS-DRIVEN INVESTIGATION RULES:
-- Build 2-6 competing hypotheses before deciding. At minimum include the allegation/violation hypothesis and the strongest plausible innocent, authorized, mistaken, or alternative explanation that the notes support or leave open.
-- Do not invent an alternative explanation merely to create balance. A hypothesis may be contradicted or weakened when evidence points against it.
+- Build 1-6 competing hypotheses before deciding. Include the allegation/violation hypothesis and, when the notes actually support or leave room for one, the strongest plausible innocent, authorized, mistaken, or alternative explanation.
+- Do not invent an alternative explanation merely to create balance. A single hypothesis is appropriate once alternatives have been genuinely eliminated by the evidence. A hypothesis may be contradicted or weakened when evidence points against it.
 - Do NOT assign percentages, probabilities, odds, or pseudo-scientific confidence to hypotheses. Use only: supported, partially_supported, weakened, unresolved, contradicted.
 - Every hypothesis must identify supporting and contradicting evidence IDs and the unresolved questions that still matter.
 - Explicitly challenge the leading hypothesis: identify what evidence would have to exist for the current conclusion to be wrong or materially different.
@@ -337,6 +347,7 @@ INVESTIGATION SUFFICIENCY / CLOSURE GATE:
 - material=true only when the unresolved issue could reasonably change the finding, the ability to defend it, required escalation/reporting, or whether the case can fairly close. Missing discipline-only context should not by itself block the investigative finding.
 - resolvable=true only when a realistic remaining investigative step can still answer the issue (obtain a record, interview an available witness, verify access/assignment, check policy, etc.).
 - For unresolved checks, nextAction must say the concrete action to take. If the information is unavailable or cannot realistically be recovered, resolvable must be false and nextAction should say to document the limitation.
+- evidenceIds must list the evidence item IDs this check's status is actually based on (e.g. the IDs that make finding_support satisfied, or that key_witnesses unresolved). Leave it empty only when no evidence bears on the check yet.
 - Do not decide the closure status yourself. The server derives it deterministically: any material unresolved + resolvable issue = NOT READY TO CLOSE; material unresolved issues that are all unresolvable = READY WITH UNRESOLVED LIMITATIONS; no material unresolved issues = READY TO CLOSE.
 - closureRationale should explain the evidence sufficiency and remaining uncertainty without naming a closure-status label.
 - whatWouldChangeConclusion must list only evidence or facts that could materially change the current finding. State the evidence needed and how it would affect the conclusion. This is a challenge function, not generic brainstorming.
@@ -397,13 +408,12 @@ function buildReportPrompt(classification) {
   return `You are a report writer for a hospital Compliance and Privacy Department. Write in formal, neutral, professional third-person voice. You are a scribe, not the investigator and not the employment decision-maker.
 
 ABSOLUTE RULE — ZERO FABRICATION:
-Every case-specific statement must be traceable to the investigation notes and consistent with the signed classification/evidence map below. Never fabricate interviews, audit results, names, dates, policy language, intent, prior history, or facts.
+Every case-specific statement must be traceable to the signed classification/evidence map below, not merely to the investigation notes in general. Never fabricate interviews, audit results, names, dates, policy language, intent, prior history, or facts.
 
 SIGNED DECISION-SUPPORT CLASSIFICATION:
 ${JSON.stringify({
   decision: classification.decision,
   riskLevel: classification.riskLevel,
-  confidenceScore: classification.confidenceScore,
   violationType: classification.violationType,
   findings: classification.findings,
   hypotheses: classification.hypotheses,
@@ -428,6 +438,11 @@ DISCIPLINE LANGUAGE:
 CITATIONS:
 - Include a regulation only when it is clearly applicable to the facts supplied. Do not dump a stock list of HIPAA sections.
 - If applicability is uncertain, omit the citation and flag the issue for legal/compliance verification instead.
+
+INVESTIGATION FINDINGS FORMAT:
+- investigationFindings must be an array of { statement, supportingFindingIds } objects, not plain strings.
+- supportingFindingIds must list the id(s) from the "findings" array in the signed classification above that the statement is actually based on.
+- A statement whose supportingFindingIds does not resolve to a real finding id will be removed before the report reaches the reader — do not submit a statement you cannot ground this way.
 
 SECTIONS:
 I. INTRODUCTION — reporting/assignment facts only if notes provide them.
@@ -460,7 +475,7 @@ router.post("/", async (req, res) => {
       return res.status(413).json({ error: "Report text is too long. Maximum is 100,000 characters." });
     }
     if (typeof payload.organizationContext === "string" && payload.organizationContext.length > MAX_ORG_CONTEXT_LENGTH) {
-      return res.status(413).json({ error: "Organization context is too long. Maximum is 20,000 characters." });
+      return res.status(413).json({ error: `Organization context is too long. Maximum is ${MAX_ORG_CONTEXT_LENGTH.toLocaleString()} characters.` });
     }
 
     const inputHash = buildInputHash(reportText, organizationContext);
@@ -513,9 +528,11 @@ router.post("/", async (req, res) => {
         "compliance_report",
       );
       const report = ReportZ.parse(rawReport);
+      const investigationFindings = groundReportFindings(report.investigationFindings, classification);
       return res.json({
         ...classification,
         ...report,
+        investigationFindings,
         missingInfo: report.missingInfo.length > 0 ? report.missingInfo : null,
       });
     }

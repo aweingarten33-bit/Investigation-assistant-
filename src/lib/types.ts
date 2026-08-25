@@ -119,7 +119,6 @@ export interface AnalysisMetadata {
 export interface AnalysisResult {
   // Classification / decision support
   decision: Decision;
-  confidenceScore: number;
   riskLevel: RiskLevel;
   violationType: string;
   violationCount: string;

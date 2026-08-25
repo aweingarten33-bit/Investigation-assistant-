@@ -18,7 +18,7 @@ export async function exportToDocx(result: AnalysisResult) {
   children.push(new Paragraph({ children: [new TextRun({ text: "Compliance Investigation Report", bold: true, size: 36, color: "2563EB", font: "Arial" })], spacing: { after: 100 } }));
   children.push(new Paragraph({ children: [new TextRun({ text: `Case: ${result.caseId}`, size: 22, color: "646464", font: "Arial" })], spacing: { after: 50 } }));
   children.push(new Paragraph({ children: [new TextRun({ text: `Generated: ${result.analysisMetadata ? new Date(result.analysisMetadata.generatedAt).toLocaleString() : new Date().toLocaleString()}`, size: 22, color: "646464", font: "Arial" })], spacing: { after: 50 } }));
-  children.push(new Paragraph({ children: [new TextRun({ text: `AI decision support: ${decisionLabel}  |  Risk: ${result.riskLevel.toUpperCase()}  |  Confidence: ${result.confidenceScore}%`, size: 22, color: "646464", font: "Arial" })], spacing: { after: 50 } }));
+  children.push(new Paragraph({ children: [new TextRun({ text: `AI decision support: ${decisionLabel}  |  Risk: ${result.riskLevel.toUpperCase()}`, size: 22, color: "646464", font: "Arial" })], spacing: { after: 50 } }));
   children.push(new Paragraph({ children: [new TextRun({ text: `Investigation closure status: ${closureLabel}`, size: 22, color: "646464", font: "Arial" })], spacing: { after: 200 } }));
   children.push(new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" } }, spacing: { after: 200 } }));
 

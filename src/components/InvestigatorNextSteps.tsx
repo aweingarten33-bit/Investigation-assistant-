@@ -63,7 +63,6 @@ function PlanSection({
 function buildAnalysisSummary(result: AnalysisResult) {
   return JSON.stringify({
     decision: result.decision,
-    confidenceScore: result.confidenceScore,
     riskLevel: result.riskLevel,
     violationType: result.violationType,
     notesCompleteness: result.notesCompleteness,
