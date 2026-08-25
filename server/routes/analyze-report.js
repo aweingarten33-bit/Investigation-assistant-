@@ -238,7 +238,11 @@ const SufficiencyCheckZ = z.object({
   resolvable: z.boolean(),
   rationale: z.string().min(1).max(2000),
   nextAction: z.string().max(1500),
-  evidenceIds: z.array(z.string().max(80)).max(50),
+  // Tolerate null/missing/malformed rather than requiring perfect model
+  // compliance on a brand-new field — an empty list is always a safe
+  // fallback here (it just skips the staleness check in hydration for that
+  // one item; it can never crash the whole classify/report call).
+  evidenceIds: z.array(z.string().max(80)).max(50).catch([]),
 });
 const ConclusionChangeFactorZ = z.object({
   description: z.string().min(1).max(1500),
@@ -287,7 +291,11 @@ const ReportZ = z.object({
   incidentDetails: z.string(),
   investigationFindings: z.array(z.object({
     statement: z.string().min(1).max(2000),
-    supportingFindingIds: z.array(z.string().max(80)).max(20),
+    // Same tolerance as SufficiencyCheckZ.evidenceIds above — null/missing
+    // falls back to an empty list rather than failing the whole report.
+    // groundReportFindings then correctly treats an ungrounded statement as
+    // unsupported and drops it, instead of 502-ing the entire request.
+    supportingFindingIds: z.array(z.string().max(80)).max(20).catch([]),
   })),
   regulationsCited: z.array(z.string()),
   recommendations: z.string(),
