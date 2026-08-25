@@ -1,4 +1,5 @@
 import { HttpError } from "./errors.js";
+import { fetchWithTimeout } from "./fetch-with-timeout.js";
 
 function model() {
   return process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
@@ -34,7 +35,7 @@ function statusFor(anthropicStatus) {
 // Structured output via forced tool-use — used by analyze-report for the
 // classify/report steps, which need a validated JSON shape back.
 export async function callStructured(systemPrompt, userMessage, schema, toolName) {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "x-api-key": apiKey(),
@@ -72,7 +73,7 @@ export async function callStructured(systemPrompt, userMessage, schema, toolName
 
 // Free-text output — used by the letter generator and case analysis tools.
 export async function callText(systemPrompt, userMessage) {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "x-api-key": apiKey(),
@@ -108,7 +109,7 @@ export async function callText(systemPrompt, userMessage) {
 // dynamic-filtering variant) since ANTHROPIC_MODEL is user-configured and
 // not guaranteed to support the newer tool version.
 export async function callTextWithSearch(systemPrompt, userMessage, maxUses = 3) {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "x-api-key": apiKey(),

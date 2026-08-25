@@ -1,4 +1,5 @@
 import { HttpError } from "./errors.js";
+import { fetchWithTimeout } from "./fetch-with-timeout.js";
 
 function apiKey() {
   const key = process.env.GEMINI_API_KEY;
@@ -35,7 +36,7 @@ function statusFor(geminiStatus) {
 
 async function generateContent(body) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model())}:generateContent?key=${encodeURIComponent(apiKey())}`;
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),

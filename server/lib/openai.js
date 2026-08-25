@@ -1,4 +1,5 @@
 import { HttpError } from "./errors.js";
+import { fetchWithTimeout } from "./fetch-with-timeout.js";
 
 function apiKey() {
   const key = process.env.OPENAI_API_KEY;
@@ -34,7 +35,7 @@ function statusFor(openaiStatus) {
 }
 
 async function chatCompletion(body) {
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const response = await fetchWithTimeout("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey()}`,
