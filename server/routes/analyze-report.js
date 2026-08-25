@@ -274,15 +274,16 @@ const ClassificationZ = z.object({
   evidenceItems: z.array(EvidenceZ).max(100),
   findings: z.array(FindingZ).max(50),
   hypotheses: z.array(HypothesisZ).min(1).max(6),
-  // Deliberately NOT .catch([]) here: deriveClosureAssessment treats an
-  // empty sufficiencyChecks array as "no material unresolved issues found"
-  // and would default straight to ready_to_close. Silently discarding a
-  // malformed check would fail toward false confidence — the one place
-  // in this schema where surfacing a hard error is the safer outcome.
-  sufficiencyChecks: z.array(SufficiencyCheckZ).min(8).max(8).refine(
-    (checks) => new Set(checks.map((check) => check.id)).size === SUFFICIENCY_CHECK_IDS.length,
-    "Every investigation sufficiency check must be returned exactly once",
-  ),
+  // NOT validated strictly here on purpose: requiring the model to return
+  // exactly 8 checks with exactly the right 8 IDs, every single time, is a
+  // hard compliance bar to hit perfectly on every call, and this was the
+  // last brittle field left after the previous two rounds of hardening.
+  // Accept anything array-shaped here; normalizeSufficiencyChecks (below)
+  // deterministically guarantees exactly the 8 canonical checks downstream
+  // regardless of what the model actually returned — including synthesizing
+  // a conservative, closure-blocking placeholder for any check the model
+  // dropped, so this is strictly safer than the old hard-fail, not looser.
+  sufficiencyChecks: z.array(z.unknown()).catch([]),
   closureRationale: z.string().min(1).max(3000),
   whatWouldChangeConclusion: z.array(ConclusionChangeFactorZ).max(12).catch([]),
   disciplineFactors: z.array(DisciplineFactorZ).max(30),
@@ -296,6 +297,43 @@ const ClassificationZ = z.object({
   }),
   policyQuestions: z.array(z.string().max(1000)).max(30).catch([]),
 });
+
+// Guarantees exactly the 8 canonical sufficiency checks, well-formed, no
+// matter what the model actually returned. Any check the model omitted, or
+// duplicated, or tagged with an unrecognized id, gets replaced with a
+// conservative placeholder — status "unresolved", material and resolvable
+// both true — so a gap in the model's output blocks closure by default
+// instead of either crashing the request or silently defaulting to
+// ready_to_close (deriveClosureAssessment can't tell "the model skipped
+// this" from "there's genuinely nothing left to resolve").
+function normalizeSufficiencyChecks(rawChecks) {
+  const byId = new Map();
+  for (const raw of Array.isArray(rawChecks) ? rawChecks : []) {
+    if (!raw || typeof raw !== "object") continue;
+    if (!SUFFICIENCY_CHECK_IDS.includes(raw.id) || byId.has(raw.id)) continue;
+    byId.set(raw.id, {
+      id: raw.id,
+      status: SUFFICIENCY_CHECK_STATUSES.includes(raw.status) ? raw.status : "unresolved",
+      material: typeof raw.material === "boolean" ? raw.material : true,
+      resolvable: typeof raw.resolvable === "boolean" ? raw.resolvable : true,
+      rationale: typeof raw.rationale === "string" && raw.rationale.trim()
+        ? raw.rationale.slice(0, 2000)
+        : "The AI did not return a usable rationale for this check.",
+      nextAction: typeof raw.nextAction === "string" ? raw.nextAction.slice(0, 1500) : "",
+      evidenceIds: Array.isArray(raw.evidenceIds) ? raw.evidenceIds.filter((id) => typeof id === "string").slice(0, 50) : [],
+    });
+  }
+  return SUFFICIENCY_CHECK_IDS.map((id) => byId.get(id) || {
+    id,
+    status: "unresolved",
+    material: true,
+    resolvable: true,
+    rationale: "The AI did not return an assessment for this check; treating it as unresolved pending review.",
+    nextAction: "Review this item manually before closing the case.",
+    evidenceIds: [],
+  });
+}
+
 // investigationFindings moved from plain strings to { statement,
 // supportingFindingIds } objects — a real shape change, not just a new
 // field, so it gets the most defensive treatment in this file:
@@ -531,6 +569,7 @@ router.post("/", async (req, res) => {
       );
 
       const parsed = ClassificationZ.parse(rawClassification);
+      parsed.sufficiencyChecks = normalizeSufficiencyChecks(parsed.sufficiencyChecks);
       const classification = hydrateEvidenceTraceability(parsed, reportText);
       const signature = await signClassification(classification, inputHash);
       return res.json({
@@ -545,6 +584,7 @@ router.post("/", async (req, res) => {
 
     if (step === "report" && previousClassification && typeof previousClassification === "object") {
       const parsedClassification = ClassificationZ.parse(previousClassification);
+      parsedClassification.sufficiencyChecks = normalizeSufficiencyChecks(parsedClassification.sufficiencyChecks);
       const classification = hydrateEvidenceTraceability(parsedClassification, reportText);
 
       if (payload.inputHash !== inputHash) {
