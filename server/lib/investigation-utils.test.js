@@ -313,6 +313,17 @@ describe("report finding grounding", () => {
     expect(result).toEqual(["Employee A accessed the record."]);
   });
 
+  it("drops a report statement with no content, even if it somehow cites a real finding id", () => {
+    const classification = baseClassification({
+      findings: [{ id: "F1", statement: "Access occurred.", inference: "", evidenceStatus: "corroborated", supportingEvidenceIds: [], contradictingEvidenceIds: [] }],
+    });
+    const result = groundReportFindings(
+      [{ statement: "", supportingFindingIds: ["F1"] }],
+      classification,
+    );
+    expect(result).toEqual([]);
+  });
+
   it("drops a report statement that cites no real finding id", () => {
     const classification = baseClassification({
       findings: [{ id: "F1", statement: "Access occurred.", inference: "", evidenceStatus: "corroborated", supportingEvidenceIds: [], contradictingEvidenceIds: [] }],

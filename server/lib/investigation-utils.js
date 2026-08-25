@@ -243,6 +243,6 @@ export function hydrateEvidenceTraceability(classification, reportText) {
 export function groundReportFindings(investigationFindings, classification) {
   const validFindingIds = new Set((classification.findings || []).map((finding) => finding.id));
   return (investigationFindings || [])
-    .filter((item) => (item.supportingFindingIds || []).some((id) => validFindingIds.has(id)))
+    .filter((item) => item.statement && (item.supportingFindingIds || []).some((id) => validFindingIds.has(id)))
     .map((item) => item.statement);
 }

@@ -214,22 +214,28 @@ const EvidenceZ = z.object({
   stance: z.enum(EVIDENCE_STANCES),
   summary: z.string().min(1).max(1000),
 });
+// ID-reference lists below all use .catch([]): a model omitting or
+// null-ing one of these is common and always safe to treat as "none cited"
+// rather than failing the entire classify/report call over it. Object
+// identity/content fields (id, statement, summary, etc.) stay strict —
+// those are core content, not auxiliary references, and a malformed one
+// should surface as an error rather than vanish silently.
 const FindingZ = z.object({
   id: z.string().min(1).max(80),
   statement: z.string().min(1).max(2000),
   inference: z.string().max(2000),
   evidenceStatus: z.enum(EVIDENCE_STATUSES),
-  supportingEvidenceIds: z.array(z.string().max(80)).max(50),
-  contradictingEvidenceIds: z.array(z.string().max(80)).max(50),
+  supportingEvidenceIds: z.array(z.string().max(80)).max(50).catch([]),
+  contradictingEvidenceIds: z.array(z.string().max(80)).max(50).catch([]),
 });
 const HypothesisZ = z.object({
   id: z.string().min(1).max(80),
   label: z.string().min(1).max(200),
   description: z.string().min(1).max(2000),
   state: z.enum(HYPOTHESIS_STATES),
-  supportingEvidenceIds: z.array(z.string().max(80)).max(50),
-  contradictingEvidenceIds: z.array(z.string().max(80)).max(50),
-  unresolvedQuestions: z.array(z.string().max(1000)).max(20),
+  supportingEvidenceIds: z.array(z.string().max(80)).max(50).catch([]),
+  contradictingEvidenceIds: z.array(z.string().max(80)).max(50).catch([]),
+  unresolvedQuestions: z.array(z.string().max(1000)).max(20).catch([]),
 });
 const SufficiencyCheckZ = z.object({
   id: z.enum(SUFFICIENCY_CHECK_IDS),
@@ -253,7 +259,7 @@ const DisciplineFactorZ = z.object({
   factor: z.enum(DISCIPLINE_FACTORS),
   assessment: z.string().min(1).max(1200),
   impact: z.enum(DISCIPLINE_IMPACTS),
-  evidenceIds: z.array(z.string().max(80)).max(50),
+  evidenceIds: z.array(z.string().max(80)).max(50).catch([]),
 });
 const ClassificationZ = z.object({
   decision: z.enum(VALID_DECISIONS),
@@ -261,19 +267,24 @@ const ClassificationZ = z.object({
   violationType: z.string().max(500),
   violationCount: z.string().max(200),
   recommendationTier: z.enum(VALID_TIERS),
-  aggravatingFactors: z.array(z.string().max(1000)).max(30),
-  mitigatingFactors: z.array(z.string().max(1000)).max(30),
+  aggravatingFactors: z.array(z.string().max(1000)).max(30).catch([]),
+  mitigatingFactors: z.array(z.string().max(1000)).max(30).catch([]),
   notesCompleteness: z.enum(["complete", "partial", "insufficient"]),
-  missingElements: z.array(z.string().max(1000)).max(30),
+  missingElements: z.array(z.string().max(1000)).max(30).catch([]),
   evidenceItems: z.array(EvidenceZ).max(100),
   findings: z.array(FindingZ).max(50),
   hypotheses: z.array(HypothesisZ).min(1).max(6),
+  // Deliberately NOT .catch([]) here: deriveClosureAssessment treats an
+  // empty sufficiencyChecks array as "no material unresolved issues found"
+  // and would default straight to ready_to_close. Silently discarding a
+  // malformed check would fail toward false confidence — the one place
+  // in this schema where surfacing a hard error is the safer outcome.
   sufficiencyChecks: z.array(SufficiencyCheckZ).min(8).max(8).refine(
     (checks) => new Set(checks.map((check) => check.id)).size === SUFFICIENCY_CHECK_IDS.length,
     "Every investigation sufficiency check must be returned exactly once",
   ),
   closureRationale: z.string().min(1).max(3000),
-  whatWouldChangeConclusion: z.array(ConclusionChangeFactorZ).max(12),
+  whatWouldChangeConclusion: z.array(ConclusionChangeFactorZ).max(12).catch([]),
   disciplineFactors: z.array(DisciplineFactorZ).max(30),
   disciplineRange: z.object({
     minimum: z.string().min(1).max(300),
@@ -283,24 +294,39 @@ const ClassificationZ = z.object({
     policyDependent: z.boolean(),
     requiresHrLegalReview: z.boolean(),
   }),
-  policyQuestions: z.array(z.string().max(1000)).max(30),
+  policyQuestions: z.array(z.string().max(1000)).max(30).catch([]),
 });
+// investigationFindings moved from plain strings to { statement,
+// supportingFindingIds } objects — a real shape change, not just a new
+// field, so it gets the most defensive treatment in this file:
+// - a plain string (the old shape, in case the model reverts to habit) is
+//   coerced into the new shape with no grounding, rather than rejected;
+// - a missing/invalid statement never blocks the item — groundReportFindings
+//   already drops anything with no valid supportingFindingIds, so an
+//   ungrounded item disappearing from the final report is correct behavior,
+//   not a bug;
+// - the whole array falls back to [] rather than failing the entire report
+//   over one malformed entry.
+const InvestigationFindingZ = z.preprocess(
+  (item) => {
+    if (typeof item === "string") return { statement: item, supportingFindingIds: [] };
+    if (item && typeof item === "object") return item;
+    return { statement: "", supportingFindingIds: [] };
+  },
+  z.object({
+    statement: z.string().max(2000).catch(""),
+    supportingFindingIds: z.array(z.string().max(80)).max(20).catch([]),
+  }),
+);
 const ReportZ = z.object({
   introduction: z.string(),
   incidentOverview: z.string(),
   incidentDetails: z.string(),
-  investigationFindings: z.array(z.object({
-    statement: z.string().min(1).max(2000),
-    // Same tolerance as SufficiencyCheckZ.evidenceIds above — null/missing
-    // falls back to an empty list rather than failing the whole report.
-    // groundReportFindings then correctly treats an ungrounded statement as
-    // unsupported and drops it, instead of 502-ing the entire request.
-    supportingFindingIds: z.array(z.string().max(80)).max(20).catch([]),
-  })),
-  regulationsCited: z.array(z.string()),
+  investigationFindings: z.array(InvestigationFindingZ).catch([]),
+  regulationsCited: z.array(z.string()).catch([]),
   recommendations: z.string(),
   conclusion: z.string(),
-  missingInfo: z.array(z.string()),
+  missingInfo: z.array(z.string()).catch([]),
 });
 const ResearchTaxonomyZ = z.object({ category: z.enum(RESEARCH_CATEGORIES) });
 
@@ -549,6 +575,10 @@ router.post("/", async (req, res) => {
   } catch (error) {
     console.error("analyze-report error:", error);
     if (error instanceof ZodError) {
+      // The client only ever sees a generic message, but log exactly which
+      // field(s) failed and why — without this, "invalid structured
+      // response" is undiagnosable from the client side alone.
+      console.error("Zod validation failure detail:", JSON.stringify(error.issues, null, 2));
       return res.status(502).json({ error: "AI returned an invalid structured response. Please try again." });
     }
     res.status(error.status || 500).json({ error: error.message || "Analysis failed" });
