@@ -525,6 +525,28 @@ V. RECOMMENDATIONS — remaining investigative work when applicable, corrective-
 VI. CONCLUSION — summarize determination, evidence strength, closure sufficiency, risk, and remaining uncertainty.`;
 }
 
+// Structured output occasionally fails schema validation on a single call —
+// not because anything is broken, just normal model variance. Retrying
+// once, fresh, is the standard mitigation and is far more effective than
+// chasing individual fields: it only re-fires on an actual validation
+// failure (never on a rate limit, timeout, or auth error, which a retry
+// wouldn't fix anyway), and a second consecutive failure is rare enough
+// that surfacing an error at that point is the right call.
+async function callStructuredWithRetry(systemPrompt, userMessage, schema, toolName, zodSchema, maxTokens, attempts = 2) {
+  let lastZodError;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const raw = await callStructured(systemPrompt, userMessage, schema, toolName, maxTokens);
+    const result = zodSchema.safeParse(raw);
+    if (result.success) return result.data;
+    lastZodError = result.error;
+    console.error(
+      `${toolName} failed schema validation on attempt ${attempt}/${attempts}` + (attempt < attempts ? " — retrying" : ""),
+      JSON.stringify(result.error.issues, null, 2),
+    );
+  }
+  throw lastZodError;
+}
+
 const router = express.Router();
 router.use(express.json({ limit: MAX_BODY_BYTES }));
 
@@ -561,14 +583,20 @@ router.post("/", async (req, res) => {
         ? `\n\nORGANIZATION-SPECIFIC DISCIPLINE CONTEXT (decision criteria only; not case evidence):\n${organizationContext}`
         : "\n\nORGANIZATION-SPECIFIC DISCIPLINE CONTEXT: Not provided. Mark policy-dependent decisions accordingly.";
 
-      const rawClassification = await callStructured(
+      const parsed = await callStructuredWithRetry(
         CLASSIFICATION_PROMPT,
         `Analyze the line-numbered investigation notes below. Build an evidence map, test competing hypotheses, assess the investigative finding, complete all eight sufficiency checks, identify what could change the conclusion, then evaluate corrective-action factors.\n\n--- CASE NOTES ---\n${numberReportLines(reportText)}\n--- END CASE NOTES ---${contextBlock}${organizationBlock}`,
         classificationSchema,
         "investigation_evidence_classification",
+        ClassificationZ,
+        // This schema can legitimately require describing up to 100 evidence
+        // items, 50 findings, and 8 detailed sufficiency checks — the
+        // default 4096 was cutting real responses off mid-generation
+        // (confirmed in production: hypotheses returned as a truncated
+        // string, closureRationale/disciplineFactors/disciplineRange missing
+        // entirely — exactly what a token-limit cutoff looks like).
+        16_384,
       );
-
-      const parsed = ClassificationZ.parse(rawClassification);
       parsed.sufficiencyChecks = normalizeSufficiencyChecks(parsed.sufficiencyChecks);
       const classification = hydrateEvidenceTraceability(parsed, reportText);
       const signature = await signClassification(classification, inputHash);
@@ -595,13 +623,14 @@ router.post("/", async (req, res) => {
         return res.status(400).json({ error: "Classification failed integrity check." });
       }
 
-      const rawReport = await callStructured(
+      const report = await callStructuredWithRetry(
         buildReportPrompt(classification),
         `Write the Incident Investigation Report from the exact notes below. Do not add facts.\n\n---\n${numberReportLines(reportText)}\n---`,
         reportSchema,
         "compliance_report",
+        ReportZ,
+        8192,
       );
-      const report = ReportZ.parse(rawReport);
       const investigationFindings = groundReportFindings(report.investigationFindings, classification);
       return res.json({
         ...classification,

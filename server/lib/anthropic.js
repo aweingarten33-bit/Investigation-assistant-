@@ -34,7 +34,7 @@ function statusFor(anthropicStatus) {
 
 // Structured output via forced tool-use — used by analyze-report for the
 // classify/report steps, which need a validated JSON shape back.
-export async function callStructured(systemPrompt, userMessage, schema, toolName) {
+export async function callStructured(systemPrompt, userMessage, schema, toolName, maxTokens = 4096) {
   const response = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -44,7 +44,7 @@ export async function callStructured(systemPrompt, userMessage, schema, toolName
     },
     body: JSON.stringify({
       model: model(),
-      max_tokens: 4096,
+      max_tokens: maxTokens,
       system: systemPrompt,
       tools: [{
         name: toolName,

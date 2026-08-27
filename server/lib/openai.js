@@ -53,9 +53,9 @@ async function chatCompletion(body) {
 }
 
 // Structured output via forced function-calling.
-export async function callStructured(systemPrompt, userMessage, schema, toolName) {
+export async function callStructured(systemPrompt, userMessage, schema, toolName, maxTokens = 4096) {
   const data = await chatCompletion({
-    max_tokens: 4096,
+    max_tokens: maxTokens,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userMessage },

@@ -50,13 +50,17 @@ async function generateContent(body) {
   return response.json();
 }
 
-// Structured output via forced function-calling.
-export async function callStructured(systemPrompt, userMessage, schema, toolName) {
+// Structured output via forced function-calling. maxTokens matches the
+// other two providers' default (4096) for consistency, even though Gemini
+// itself defaults higher — callers with a large output schema should still
+// raise it explicitly rather than relying on a provider-specific default.
+export async function callStructured(systemPrompt, userMessage, schema, toolName, maxTokens = 4096) {
   const data = await generateContent({
     systemInstruction: { parts: [{ text: systemPrompt }] },
     contents: [{ role: "user", parts: [{ text: userMessage }] }],
     tools: [{ functionDeclarations: [{ name: toolName, description: `Output structured ${toolName} data.`, parameters: schema }] }],
     toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: [toolName] } },
+    generationConfig: { maxOutputTokens: maxTokens },
   });
 
   const parts = data.candidates?.[0]?.content?.parts ?? [];
