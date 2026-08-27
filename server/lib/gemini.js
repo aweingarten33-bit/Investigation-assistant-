@@ -47,7 +47,11 @@ async function generateContent(body) {
     console.error("Gemini API error:", response.status, text);
     throw new HttpError(describeError(response.status, text), statusFor(response.status));
   }
-  return response.json();
+  const data = await response.json();
+  if (data.candidates?.[0]?.finishReason === "MAX_TOKENS") {
+    console.error(`Gemini response was truncated: finishReason=MAX_TOKENS at maxOutputTokens=${body.generationConfig?.maxOutputTokens}.`);
+  }
+  return data;
 }
 
 // Structured output via forced function-calling. maxTokens matches the

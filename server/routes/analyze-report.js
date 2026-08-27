@@ -133,7 +133,7 @@ const disciplineFactorSchema = {
   required: ["factor", "assessment", "impact", "evidenceIds"],
 };
 
-const classificationSchema = {
+export const classificationSchema = {
   type: "object",
   properties: {
     decision: { type: "string", enum: VALID_DECISIONS },
@@ -261,7 +261,7 @@ const DisciplineFactorZ = z.object({
   impact: z.enum(DISCIPLINE_IMPACTS),
   evidenceIds: z.array(z.string().max(80)).max(50).catch([]),
 });
-const ClassificationZ = z.object({
+export const ClassificationZ = z.object({
   decision: z.enum(VALID_DECISIONS),
   riskLevel: z.enum(VALID_RISK),
   violationType: z.string().max(500),
@@ -525,24 +525,41 @@ V. RECOMMENDATIONS — remaining investigative work when applicable, corrective-
 VI. CONCLUSION — summarize determination, evidence strength, closure sufficiency, risk, and remaining uncertainty.`;
 }
 
-// Structured output occasionally fails schema validation on a single call —
-// not because anything is broken, just normal model variance. Retrying
-// once, fresh, is the standard mitigation and is far more effective than
-// chasing individual fields: it only re-fires on an actual validation
-// failure (never on a rate limit, timeout, or auth error, which a retry
-// wouldn't fix anyway), and a second consecutive failure is rare enough
-// that surfacing an error at that point is the right call.
-async function callStructuredWithRetry(systemPrompt, userMessage, schema, toolName, zodSchema, maxTokens, attempts = 2) {
+// Turns a ZodError into short, concrete lines a model can act on — e.g.
+// "hypotheses: Expected array, received string" — rather than retrying
+// blind. This is what makes the retry below actually corrective instead of
+// just hoping for a better roll on the same prompt.
+export function describeZodIssues(zodError) {
+  return zodError.issues
+    .map((issue) => `- ${issue.path.join(".") || "(root)"}: ${issue.message}`)
+    .join("\n");
+}
+
+// Structured output can fail schema validation for two different reasons:
+// the response gets cut off before finishing (fixed by giving the call
+// enough maxTokens — see the 16_384/8192 call sites below) or the model
+// gets a field's shape wrong despite the schema (e.g. writing hypotheses as
+// a paragraph instead of an array). A bare retry only helps the first case.
+// Feeding the exact validation failure back on the retry attempt targets
+// the second case too, without ever inventing or defaulting the field
+// ourselves. Bounded at one retry (two attempts total, the default) — a
+// second consecutive failure fails clearly rather than looping.
+export async function callStructuredWithRetry(systemPrompt, userMessage, schema, toolName, zodSchema, maxTokens, attempts = 2) {
   let lastZodError;
+  let message = userMessage;
   for (let attempt = 1; attempt <= attempts; attempt++) {
-    const raw = await callStructured(systemPrompt, userMessage, schema, toolName, maxTokens);
+    const raw = await callStructured(systemPrompt, message, schema, toolName, maxTokens);
     const result = zodSchema.safeParse(raw);
     if (result.success) return result.data;
     lastZodError = result.error;
+    const isLastAttempt = attempt === attempts;
     console.error(
-      `${toolName} failed schema validation on attempt ${attempt}/${attempts}` + (attempt < attempts ? " — retrying" : ""),
+      `${toolName} failed schema validation on attempt ${attempt}/${attempts}` + (isLastAttempt ? "" : " — retrying with corrective feedback"),
       JSON.stringify(result.error.issues, null, 2),
     );
+    if (!isLastAttempt) {
+      message = `${userMessage}\n\n--- YOUR PREVIOUS RESPONSE WAS REJECTED ---\nIt did not match the required structure. Fix exactly these problems and return a complete, corrected response — do not omit or shorten any other field:\n${describeZodIssues(result.error)}`;
+    }
   }
   throw lastZodError;
 }

@@ -49,7 +49,11 @@ async function chatCompletion(body) {
     console.error("OpenAI API error:", response.status, text);
     throw new HttpError(describeError(response.status, text), statusFor(response.status));
   }
-  return response.json();
+  const data = await response.json();
+  if (data.choices?.[0]?.finish_reason === "length") {
+    console.error(`OpenAI response was truncated: finish_reason=length at max_tokens=${body.max_tokens}.`);
+  }
+  return data;
 }
 
 // Structured output via forced function-calling.

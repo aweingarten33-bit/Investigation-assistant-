@@ -63,6 +63,12 @@ export async function callStructured(systemPrompt, userMessage, schema, toolName
   }
 
   const data = await response.json();
+  if (data.stop_reason === "max_tokens") {
+    // Confirms (rather than infers) that the response was cut off mid-
+    // generation — this is the direct signal, not a guess from which
+    // fields happened to be missing downstream.
+    console.error(`Anthropic response for ${toolName} was truncated: stop_reason=max_tokens at maxTokens=${maxTokens}.`);
+  }
   const toolUse = data.content?.find((block) => block.type === "tool_use");
   if (!toolUse) {
     console.error("No tool_use block in response:", JSON.stringify(data));
