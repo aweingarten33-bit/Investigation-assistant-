@@ -1,16 +1,17 @@
 // @vitest-environment node
 //
-// Proves the LangGraph mechanics without needing a real model call: that
-// case state is not merely process memory (a fresh checkpointer instance
-// pointed at the same file restores it), that interrupt/resume actually
-// works across both pause points (next-best-action and ready-for-review),
-// that the deterministic anti-repetition guard fires, that a model schema
-// failure halts the graph instead of being silently accepted, that
-// malformed human input is rejected rather than blended into the case, and
-// that evidence invalidation reopens a previously satisfied sufficiency
-// check. The semantic "does the AI reason well about real evidence"
-// question is covered separately by investigation-graph.live.test.js,
-// gated behind a real API key.
+// Proves the ACH/Key-Assumptions-Check reasoning replacement end to end:
+// a real ACH evidence x hypothesis matrix drives ranking (by inconsistency,
+// not confirmation count), sensitivity analysis identifies pivotal
+// evidence, a weak key assumption becomes an investigative gap, readiness
+// is computed deterministically from those gaps (never announced by the
+// model), the final recommendation packet is fully assembled but never
+// makes the human's decision, and LangGraph's own interrupt/checkpoint/
+// resume mechanics (proven in the prior pass) still work unchanged. Uses
+// the controlled-medication-diversion fixture throughout as the primary
+// end-to-end case, per the request. No live model call is made or faked
+// here — see investigation-graph.live.test.js for that, gated on a real
+// API key.
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -18,73 +19,56 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Command } from "@langchain/langgraph";
 import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite";
 import { buildInvestigationGraph } from "./investigation-graph.js";
-import { EvidenceAnalysisZ, NextActionZ } from "./schemas.js";
+import { EvidenceExtractionZ, KeyAssumptionsCheckZ, NextActionZ, FinalRecommendationZ } from "./schemas.js";
 
-function makeFakeModel({ evidenceAnalysisResponses, nextActionResponses }) {
-  let evidenceIdx = 0;
-  let actionIdx = 0;
-  const evidenceCalls = [];
-  const actionCalls = [];
+function makeFakeModel({ evidenceResponses = [], assumptionsResponses = [], actionResponses = [], finalRecommendationResponses = [] } = {}) {
+  const idx = { evidence: 0, assumptions: 0, action: 0, final: 0 };
+  const calls = { evidenceCalls: [], assumptionsCalls: [], actionCalls: [], finalCalls: [] };
+  function next(list, counterKey, fallback) {
+    if (list.length === 0) return fallback;
+    const i = Math.min(idx[counterKey], list.length - 1);
+    idx[counterKey] += 1;
+    return list[i];
+  }
   return {
     withStructuredOutput(schema) {
-      if (schema === EvidenceAnalysisZ) {
-        return {
-          invoke: async (messages) => {
-            evidenceCalls.push(messages);
-            const i = Math.min(evidenceIdx, evidenceAnalysisResponses.length - 1);
-            evidenceIdx += 1;
-            const response = evidenceAnalysisResponses[i];
-            if (response instanceof Error) throw response;
-            return response;
-          },
-        };
+      if (schema === EvidenceExtractionZ) {
+        return { invoke: async (messages) => { calls.evidenceCalls.push(messages); const r = next(evidenceResponses, "evidence"); if (r instanceof Error) throw r; return r; } };
+      }
+      if (schema === KeyAssumptionsCheckZ) {
+        return { invoke: async (messages) => { calls.assumptionsCalls.push(messages); const r = next(assumptionsResponses, "assumptions", { keyAssumptions: [] }); if (r instanceof Error) throw r; return r; } };
       }
       if (schema === NextActionZ) {
-        return {
-          invoke: async (messages) => {
-            actionCalls.push(messages);
-            const i = Math.min(actionIdx, nextActionResponses.length - 1);
-            actionIdx += 1;
-            const response = nextActionResponses[i];
-            if (response instanceof Error) throw response;
-            return response;
-          },
-        };
+        return { invoke: async (messages) => { calls.actionCalls.push(messages); const r = next(actionResponses, "action"); if (r instanceof Error) throw r; return r; } };
+      }
+      if (schema === FinalRecommendationZ) {
+        return { invoke: async (messages) => { calls.finalCalls.push(messages); const r = next(finalRecommendationResponses, "final", { recommendedDetermination: "not_applicable", rationale: "No standard supplied.", whatCouldChangeThis: "New material evidence." }); if (r instanceof Error) throw r; return r; } };
       }
       throw new Error("makeFakeModel: unexpected schema passed to withStructuredOutput");
     },
-    _calls: { evidenceCalls, actionCalls },
+    _calls: calls,
   };
 }
 
-const unresolvedCheck = (id, overrides = {}) => ({
-  id, status: "unresolved", material: true, resolvable: true,
-  rationale: `${id} needs more work`, nextAction: `Resolve ${id}`, evidenceIds: [], ...overrides,
+const hyp = (id, label) => ({ id, label, description: label });
+const ev = (id, lineStart, lineEnd, overrides = {}) => ({
+  id, sourceLabel: "Case notes", lineStart, lineEnd, evidenceType: "system_record",
+  summary: `Evidence ${id}`, sourceReliability: null, informationCredibility: null, ...overrides,
 });
-const satisfiedCheck = (id, overrides = {}) => ({
-  id, status: "satisfied", material: true, resolvable: false,
-  rationale: `${id} is satisfied`, nextAction: "", evidenceIds: [], ...overrides,
-});
-const ALL_CHECK_IDS = ["finding_support", "contradictory_evidence", "objective_records", "key_witnesses", "material_inconsistencies", "policy_regulatory_context", "standard_of_proof", "reporting_escalation"];
+const row = (evidenceId, marks) => ({ evidenceId, marks });
 
-function evidenceAnalysisResponse({ unresolvedIds = [], evidenceItems = [], findings = [], hypotheses, checkOverrides = {} }) {
-  return {
-    evidenceItems,
-    findings,
-    hypotheses: hypotheses || [{ id: "H1", label: "Possible diversion", description: "Access/discrepancy could reflect diversion or a documentation error.", state: "unresolved", supportingEvidenceIds: [], contradictingEvidenceIds: [], unresolvedQuestions: [] }],
-    sufficiencyChecks: ALL_CHECK_IDS.map((id) => (unresolvedIds.includes(id) ? unresolvedCheck(id, checkOverrides[id]) : satisfiedCheck(id, checkOverrides[id]))),
-    unresolvedQuestions: unresolvedIds.map((id) => `Open question for ${id}`),
-  };
+function extraction({ evidenceItems = [], findings = [], hypotheses, achMatrix = [], unresolvedQuestions = [] }) {
+  return { evidenceItems, findings, hypotheses, achMatrix, unresolvedQuestions };
 }
 
-function nextAction(overrides = {}) {
+function action(overrides = {}) {
   return {
+    targetGapId: "question:0:placeholder",
     actionType: "INTERVIEW",
     action: "Interview the relevant witness",
-    whyThisIsNext: "No witness account exists yet",
-    evidenceGapAddressed: "key_witnesses",
+    whyThisIsNext: "Closes the open question",
     evidenceOrPersonNeeded: "Nurse Alvarez",
-    suggestedQuestions: ["Did you administer the second dose?"],
+    suggestedQuestions: ["What happened during the medication pass?"],
     documentRequest: "",
     expectedInformationGain: "Confirms who administered the dose",
     whatCouldChangeBasedOnResult: "Could confirm or rule out diversion",
@@ -92,14 +76,20 @@ function nextAction(overrides = {}) {
   };
 }
 
-const CASE_NOTES = "Medication count discrepancy on Unit 4B.";
+// 5 lines, deliberately short so out-of-range citations (line 99) are easy
+// to construct for the invalidation test.
+const CASE_NOTES = `Unit 4B automated dispensing cabinet (ADC) reconciliation for oxycodone 5mg tablets flagged a discrepancy on the overnight shift.
+ADC pull log shows RN Dana Reyes withdrew 2 tablets of oxycodone 5mg at 02:14 for patient in room 412, order authorizing 1 tablet per administration.
+Medication administration record (MAR) for the 412 patient shows only 1 tablet documented as administered at 02:20.
+No waste/discard documentation exists for the second tablet as of this reconciliation.
+Charge nurse note states Reyes was the only RN with ADC access on 412's medication pass during that window.`;
 
-describe("investigation graph — mechanics", () => {
+describe("investigation graph — ACH reasoning", () => {
   let dbDir;
   let dbPath;
 
   beforeEach(() => {
-    dbDir = mkdtempSync(path.join(tmpdir(), "investigation-graph-test-"));
+    dbDir = mkdtempSync(path.join(tmpdir(), "investigation-graph-ach-test-"));
     dbPath = path.join(dbDir, "checkpoints.sqlite");
   });
 
@@ -117,222 +107,367 @@ describe("investigation graph — mechanics", () => {
     return graph.getState({ configurable: { thread_id: threadId } });
   }
 
-  it("pauses at humanActionInterrupt with a recommended action when evidence is incomplete", async () => {
+  it("1. multiple plausible hypotheses produce a real ACH evidence x hypothesis matrix", async () => {
+    const hypotheses = [hyp("H1", "Diversion by Reyes"), hyp("H2", "Documentation/waste error"), hyp("H3", "Authorized double dose")];
     const model = makeFakeModel({
-      evidenceAnalysisResponses: [evidenceAnalysisResponse({ unresolvedIds: ["key_witnesses"] })],
-      nextActionResponses: [nextAction()],
+      evidenceResponses: [extraction({
+        evidenceItems: [ev("E1", 2, 2), ev("E2", 3, 3), ev("E3", 5, 5)],
+        hypotheses,
+        achMatrix: [
+          row("E1", { H1: "consistent", H2: "neutral", H3: "inconsistent" }),
+          row("E2", { H1: "consistent", H2: "consistent", H3: "inconsistent" }),
+          row("E3", { H1: "consistent", H2: "neutral", H3: "not_applicable" }),
+        ],
+        unresolvedQuestions: ["Was the second tablet ever accounted for?"],
+      })],
+      actionResponses: [action()],
     });
     await invoke("case-1", model, { caseId: "case-1", caseNotes: CASE_NOTES });
     const snapshot = await getState("case-1", model);
 
-    expect(snapshot.next).toContain("humanActionInterrupt");
-    const interrupt = snapshot.tasks.find((t) => t.interrupts.length > 0).interrupts[0];
-    expect(interrupt.value.kind).toBe("next_best_action");
-    expect(interrupt.value.recommendedAction.actionType).toBe("INTERVIEW");
-    expect(interrupt.value.recommendedAction.evidenceOrPersonNeeded).toBe("Nurse Alvarez");
-    expect(snapshot.values.investigationStatus).toBe("incomplete");
-    expect(snapshot.values.graphStatus).toBe("awaiting_human_action");
+    expect(snapshot.values.achMatrix).toHaveLength(3);
+    expect(snapshot.values.achMatrix.every((r) => Object.keys(r.marks).length === 3)).toBe(true);
+    expect(snapshot.values.achResult.ranking).toHaveLength(3);
+    expect(snapshot.values.hypotheses.map((h) => h.id).sort()).toEqual(["H1", "H2", "H3"]);
   });
 
-  it("case state is not merely process memory: a fresh checkpointer instance restores it", async () => {
+  it("2. a hypothesis with more confirming marks can still lose to one with fewer, more serious inconsistencies", async () => {
+    const hypotheses = [hyp("H1", "Diversion"), hyp("H2", "Documentation error")];
     const model = makeFakeModel({
-      evidenceAnalysisResponses: [evidenceAnalysisResponse({ unresolvedIds: ["key_witnesses"] })],
-      nextActionResponses: [nextAction()],
+      evidenceResponses: [extraction({
+        evidenceItems: [ev("E1", 1, 1), ev("E2", 2, 2), ev("E3", 3, 3), ev("E4", 4, 4)],
+        hypotheses,
+        achMatrix: [
+          // H1 racks up three confirmations but one strongly_inconsistent mark.
+          row("E1", { H1: "strongly_consistent", H2: "neutral" }),
+          row("E2", { H1: "consistent", H2: "neutral" }),
+          row("E3", { H1: "consistent", H2: "consistent" }),
+          row("E4", { H1: "strongly_inconsistent", H2: "consistent" }),
+        ],
+        unresolvedQuestions: [],
+      })],
+      actionResponses: [action()],
     });
-    // First "process": open the case, let it pause, then let this graph/
-    // checkpointer instance go out of scope entirely.
     await invoke("case-2", model, { caseId: "case-2", caseNotes: CASE_NOTES });
-    expect(existsSync(dbPath)).toBe(true);
-
-    // Second "process": brand new SqliteSaver instance, brand new compiled
-    // graph, pointed at the same file and thread_id. If this restores the
-    // paused state, persistence is real, not an in-memory illusion.
     const snapshot = await getState("case-2", model);
-    expect(snapshot.next).toContain("humanActionInterrupt");
-    expect(snapshot.values.currentNextBestAction.evidenceOrPersonNeeded).toBe("Nurse Alvarez");
-    expect(snapshot.values.caseId).toBe("case-2");
+
+    // H1 has 3 confirmations vs H2's 2, but H1 also carries the only
+    // inconsistency (weighted 2.0) — ACH must rank H2 first regardless.
+    expect(snapshot.values.achResult.ranking[0].hypothesisId).toBe("H2");
   });
 
-  it("resumes the same case, incorporates new evidence, and does not repeat the completed action", async () => {
+  it("3. contradictory evidence remains visible rather than being dropped because it disagrees with the leader", async () => {
+    const hypotheses = [hyp("H1", "Diversion"), hyp("H2", "Documentation error")];
     const model = makeFakeModel({
-      evidenceAnalysisResponses: [
-        evidenceAnalysisResponse({ unresolvedIds: ["key_witnesses"] }),
-        // After the interview evidence comes in: key_witnesses now
-        // satisfied, but a new gap (objective_records) surfaces.
-        evidenceAnalysisResponse({
-          unresolvedIds: ["objective_records"],
-          findings: [{ id: "F1", statement: "Alvarez states she was not the one who administered the final dose.", inference: "Contradicts the assignment log.", evidenceStatus: "single_source", supportingEvidenceIds: [], contradictingEvidenceIds: [] }],
+      evidenceResponses: [extraction({
+        evidenceItems: [ev("E1", 1, 1), ev("E2", 2, 2), ev("E3", 3, 3)],
+        hypotheses,
+        achMatrix: [
+          row("E1", { H1: "consistent", H2: "inconsistent" }),
+          row("E2", { H1: "inconsistent", H2: "consistent" }), // a loose end against the leader
+          row("E3", { H1: "consistent", H2: "inconsistent" }),
+        ],
+      })],
+      actionResponses: [action()],
+    });
+    await invoke("case-3", model, { caseId: "case-3", caseNotes: CASE_NOTES });
+    const snapshot = await getState("case-3", model);
+
+    // H1: one inconsistency (E2, weighted 1). H2: two inconsistencies (E1,
+    // E3, weighted 2) — H1 leads despite carrying a visible loose end.
+    const leaderId = snapshot.values.achResult.ranking[0].hypothesisId;
+    expect(leaderId).toBe("H1");
+    const contradictingRow = snapshot.values.achMatrix.find((r) => r.evidenceId === "E2");
+    expect(contradictingRow.marks.H1).toBe("inconsistent"); // still there, not silently dropped
+  });
+
+  it("4. removing pivotal evidence changes the ranking, and sensitivity analysis reports it", async () => {
+    const hypotheses = [hyp("H1", "Diversion"), hyp("H2", "Documentation error")];
+    const model = makeFakeModel({
+      evidenceResponses: [extraction({
+        evidenceItems: [ev("E1", 1, 1), ev("E2", 2, 2)],
+        hypotheses,
+        achMatrix: [
+          row("E1", { H1: "consistent", H2: "consistent" }), // non-diagnostic, doesn't matter
+          row("E2", { H1: "inconsistent", H2: "consistent" }), // the only inconsistency — pivotal
+        ],
+      })],
+      actionResponses: [action()],
+    });
+    await invoke("case-4", model, { caseId: "case-4", caseNotes: CASE_NOTES });
+    const snapshot = await getState("case-4", model);
+
+    expect(snapshot.values.achResult.ranking[0].hypothesisId).toBe("H2");
+    expect(snapshot.values.sensitivity.pivotalEvidenceIds).toContain("E2");
+    const flip = snapshot.values.sensitivity.flips.find((f) => f.evidenceId === "E2");
+    expect(flip.newLeaderId).toBe("H1");
+  });
+
+  it("5. a weak, high-sensitivity key assumption creates an unresolved investigative gap", async () => {
+    const hypotheses = [hyp("H1", "Diversion")];
+    const model = makeFakeModel({
+      evidenceResponses: [extraction({
+        evidenceItems: [ev("E1", 1, 1)],
+        hypotheses,
+        achMatrix: [row("E1", { H1: "consistent" })],
+        unresolvedQuestions: [],
+      })],
+      assumptionsResponses: [{
+        keyAssumptions: [{
+          id: "A1", statement: "Only Reyes had ADC access during the window",
+          assumptionType: "implicit", grounding: "weak", sensitivity: "high",
+          disposition: "re-source", dispositionNote: "Verify the ADC access log independently.",
+        }],
+      }],
+      actionResponses: [action({ targetGapId: "assumption:A1" })],
+    });
+    await invoke("case-5", model, { caseId: "case-5", caseNotes: CASE_NOTES });
+    const snapshot = await getState("case-5", model);
+
+    expect(snapshot.values.keyAssumptions[0].category).toBe("unsupported_questionable");
+    const gap = snapshot.values.investigativeGaps.find((g) => g.gapType === "unresolved_key_assumption");
+    expect(gap).toBeTruthy();
+    expect(gap.resolvable).toBe(true);
+    expect(snapshot.values.investigationStatus).toBe("incomplete");
+  });
+
+  it("6. new human evidence can flip the leading hypothesis", async () => {
+    const hypotheses = [hyp("H1", "Diversion"), hyp("H2", "Documentation error")];
+    const model = makeFakeModel({
+      evidenceResponses: [
+        extraction({
+          evidenceItems: [ev("E1", 1, 1)],
+          hypotheses,
+          achMatrix: [row("E1", { H1: "consistent", H2: "inconsistent" })],
+          unresolvedQuestions: ["Was there a witness to the medication pass?"],
+        }),
+        // After human evidence: a new record contradicts H1 more seriously
+        // than it contradicts H2.
+        extraction({
+          evidenceItems: [ev("E1", 1, 1), ev("E2", 2, 2)],
+          hypotheses,
+          achMatrix: [
+            row("E1", { H1: "consistent", H2: "inconsistent" }),
+            row("E2", { H1: "strongly_inconsistent", H2: "consistent" }),
+          ],
         }),
       ],
-      nextActionResponses: [
-        nextAction(),
-        nextAction({ actionType: "OBTAIN_RECORD", evidenceGapAddressed: "objective_records", evidenceOrPersonNeeded: "dispensing cabinet access log", suggestedQuestions: [], documentRequest: "Cabinet access log for the shift in question" }),
-      ],
+      actionResponses: [action()],
     });
 
-    await invoke("case-3", model, { caseId: "case-3", caseNotes: CASE_NOTES });
+    await invoke("case-6", model, { caseId: "case-6", caseNotes: CASE_NOTES });
+    const before = await getState("case-6", model);
+    expect(before.values.achResult.ranking[0].hypothesisId).toBe("H1");
 
-    // New process, new checkpointer instance, same thread_id — same
-    // pattern a fresh HTTP request would use (proves API resume by caseId).
-    const resumed = await invoke("case-3", model, new Command({ resume: { resultType: "interview_notes", text: "Nurse Alvarez states she was not the one who administered the final dose." } }));
-
-    const snapshot = await getState("case-3", model);
-    expect(snapshot.next).toContain("humanActionInterrupt");
-    const secondAction = snapshot.values.currentNextBestAction;
-    // A genuinely new, different action — not the same completed interview.
-    expect(secondAction.actionType).toBe("OBTAIN_RECORD");
-    expect(secondAction.evidenceOrPersonNeeded).not.toBe("Nurse Alvarez");
-    // The new evidence was actually incorporated into the analysis findings.
-    expect(snapshot.values.findings.some((f) => f.statement.includes("Alvarez"))).toBe(true);
-    // The completed interview is recorded, not silently dropped.
-    expect(snapshot.values.actionHistory.find((a) => a.evidenceOrPersonNeeded === "Nurse Alvarez").status).toBe("completed");
-    expect(snapshot.values.completedActions.some((a) => a.evidenceOrPersonNeeded === "Nurse Alvarez")).toBe(true);
-    // The raw human input is preserved in the audit trail, not overwritten.
-    expect(snapshot.values.humanInputs).toHaveLength(1);
-    expect(snapshot.values.humanInputs[0].resultType).toBe("interview_notes");
-    expect(resumed).toBeTruthy();
+    await invoke("case-6", model, new Command({ resume: { resultType: "document", text: "The access log shows Reyes was not the only nurse with cabinet access that shift." } }));
+    const after = await getState("case-6", model);
+    expect(after.values.achResult.ranking[0].hypothesisId).toBe("H2");
   });
 
-  it("anti-repetition guard: retries with corrective feedback when the model tries to repeat a completed action", async () => {
+  it("7. invalidated evidence (an impossible citation) is stripped and changes the analysis", async () => {
+    const hypotheses = [hyp("H1", "Diversion"), hyp("H2", "Documentation error")];
     const model = makeFakeModel({
-      evidenceAnalysisResponses: [
-        evidenceAnalysisResponse({ unresolvedIds: ["key_witnesses"] }),
-        evidenceAnalysisResponse({ unresolvedIds: ["key_witnesses"] }), // still unresolved after "new" evidence
+      evidenceResponses: [
+        extraction({
+          evidenceItems: [ev("E1", 1, 1)],
+          hypotheses,
+          achMatrix: [row("E1", { H1: "inconsistent", H2: "consistent" })],
+          unresolvedQuestions: ["Was there a witness to the medication pass?"],
+        }),
+        // Round 2: the model cites E1 again but with an impossible line
+        // range (line 99 doesn't exist in a 5-line case) — validateEvidenceItems
+        // must strip it, and the matrix row that depends on it must go too.
+        extraction({
+          evidenceItems: [ev("E1", 99, 99)],
+          hypotheses,
+          achMatrix: [row("E1", { H1: "inconsistent", H2: "consistent" })],
+        }),
       ],
-      nextActionResponses: [
-        nextAction(),
-        // Second call's FIRST attempt deliberately repeats the same action —
-        // this is what the deterministic guard must catch.
-        nextAction(),
-        // Retry attempt: a genuinely different action.
-        nextAction({ evidenceOrPersonNeeded: "Shift supervisor" }),
-      ],
+      actionResponses: [action()],
     });
 
-    await invoke("case-4", model, { caseId: "case-4", caseNotes: CASE_NOTES });
-    await invoke("case-4", model, new Command({ resume: { resultType: "interview_notes", text: "Alvarez says she was working but did not touch the cart." } }));
+    await invoke("case-7", model, { caseId: "case-7", caseNotes: CASE_NOTES });
+    const before = await getState("case-7", model);
+    expect(before.values.evidenceItems.map((e) => e.id)).toContain("E1");
+    expect(before.values.achMatrix.map((r) => r.evidenceId)).toContain("E1");
 
-    expect(model._calls.actionCalls.length).toBe(3); // 1 first-round + 2 second-round (repeat, then corrected retry)
-    const snapshot = await getState("case-4", model);
-    expect(snapshot.values.currentNextBestAction.evidenceOrPersonNeeded).toBe("Shift supervisor");
-    // The retry prompt actually told the model what was wrong.
-    const retryMessage = model._calls.actionCalls[2].find((m) => m.role === "user" && m.content.includes("already attempted"));
-    expect(retryMessage).toBeTruthy();
+    await invoke("case-7", model, new Command({ resume: { resultType: "response", text: "Additional context." } }));
+    const after = await getState("case-7", model);
+    expect(after.values.evidenceItems.map((e) => e.id)).not.toContain("E1");
+    expect(after.values.achMatrix.map((r) => r.evidenceId)).not.toContain("E1");
   });
 
-  it("reaches readyForHumanReview once the closure gate is satisfied — no next-best-action call", async () => {
+  it("8. Next Best Action targets the most diagnostic gap rather than a generic one", async () => {
+    const hypotheses = [hyp("H1", "Diversion"), hyp("H2", "Documentation error")];
     const model = makeFakeModel({
-      evidenceAnalysisResponses: [evidenceAnalysisResponse({ unresolvedIds: [] })], // everything satisfied
-      nextActionResponses: [],
+      evidenceResponses: [extraction({
+        evidenceItems: [ev("E1", 1, 1), ev("E2", 2, 2)],
+        hypotheses,
+        achMatrix: [
+          row("E1", { H1: "consistent", H2: "consistent" }),
+          row("E2", { H1: "inconsistent", H2: "consistent" }), // pivotal — highest priority gap
+        ],
+        unresolvedQuestions: ["Some generic open question unrelated to the matrix"],
+      })],
+      actionResponses: [action({ targetGapId: "pivot:E2" })],
     });
-    await invoke("case-5", model, { caseId: "case-5", caseNotes: "A fully documented, uncontested case." });
+    await invoke("case-8", model, { caseId: "case-8", caseNotes: CASE_NOTES });
 
-    const snapshot = await getState("case-5", model);
+    // The candidate list handed to the model must rank the pivotal gap
+    // ahead of the generic unresolved question.
+    const promptContent = model._calls.actionCalls[0].find((m) => m.role === "user").content;
+    const pivotIndex = promptContent.indexOf("pivot:E2");
+    const questionIndex = promptContent.indexOf("discriminating_evidence_missing");
+    expect(pivotIndex).toBeGreaterThan(-1);
+    expect(pivotIndex).toBeLessThan(questionIndex);
+
+    const snapshot = await getState("case-8", model);
+    expect(snapshot.values.currentNextBestAction.targetGapId).toBe("pivot:E2");
+  });
+
+  it("9. no reasonable remaining action + unavoidable uncertainty produces READY_WITH_LIMITATIONS", async () => {
+    const hypotheses = [hyp("H1", "Diversion")];
+    const model = makeFakeModel({
+      evidenceResponses: [extraction({
+        evidenceItems: [ev("E1", 1, 1)],
+        hypotheses,
+        achMatrix: [row("E1", { H1: "consistent" })],
+        unresolvedQuestions: [],
+      })],
+      assumptionsResponses: [{
+        keyAssumptions: [{
+          id: "A1", statement: "The ADC log timestamp is accurate",
+          assumptionType: "implicit", grounding: "weak", sensitivity: "high",
+          disposition: "bound", dispositionNote: "No further verification is realistically obtainable.",
+        }],
+      }],
+    });
+    const result = await invoke("case-9", model, { caseId: "case-9", caseNotes: CASE_NOTES });
+
+    expect(result.investigationStatus).toBe("ready_with_limitations");
+    expect(model._calls.actionCalls).toHaveLength(0); // no next-action call — nothing resolvable to recommend
+    const snapshot = await getState("case-9", model);
     expect(snapshot.next).toContain("readyForHumanReview");
-    const interrupt = snapshot.tasks.find((t) => t.interrupts.length > 0).interrupts[0];
-    expect(interrupt.value.kind).toBe("ready_for_human_review");
-    expect(interrupt.value.closureAssessment.status).toBe("ready_to_close");
-    expect(snapshot.values.investigationStatus).toBe("ready_for_review");
-    expect(model._calls.actionCalls.length).toBe(0); // recommendNextBestAction never even called
+  });
+
+  it("10. material resolvable uncertainty prevents READY_FOR_HUMAN_REVIEW", async () => {
+    const hypotheses = [hyp("H1", "Diversion")];
+    const model = makeFakeModel({
+      evidenceResponses: [extraction({
+        evidenceItems: [ev("E1", 1, 1)],
+        hypotheses,
+        achMatrix: [row("E1", { H1: "consistent" })],
+        unresolvedQuestions: ["Was a waste witness available for the second tablet?"],
+      })],
+      actionResponses: [action({ targetGapId: "question:0:Was a waste witness available for" })],
+    });
+    const result = await invoke("case-10", model, { caseId: "case-10", caseNotes: CASE_NOTES });
+
+    expect(result.investigationStatus).toBe("incomplete");
+    const snapshot = await getState("case-10", model);
+    expect(snapshot.next).toContain("humanActionInterrupt");
+    expect(snapshot.next).not.toContain("readyForHumanReview");
+  });
+
+  it("11. READY_FOR_HUMAN_REVIEW produces the full AI recommendation packet but never decides for the human", async () => {
+    const hypotheses = [hyp("H1", "Diversion"), hyp("H2", "Documentation error")];
+    const model = makeFakeModel({
+      evidenceResponses: [extraction({
+        evidenceItems: [ev("E1", 1, 1)],
+        hypotheses,
+        achMatrix: [row("E1", { H1: "consistent", H2: "neutral" })],
+        unresolvedQuestions: [],
+      })],
+      finalRecommendationResponses: [{
+        recommendedDetermination: "substantiated",
+        rationale: "The pull log and MAR discrepancy is unexplained and no alternative explanation survives.",
+        whatCouldChangeThis: "A waste-witness statement corroborating a dropped tablet.",
+      }],
+    });
+    const result = await invoke("case-11", model, { caseId: "case-11", caseNotes: CASE_NOTES });
+
+    expect(result.investigationStatus).toBe("ready_for_review");
+    const snapshot = await getState("case-11", model);
+    const interruptTask = snapshot.tasks.find((t) => t.interrupts.length > 0);
+    const packet = interruptTask.interrupts[0].value.finalRecommendation;
+
+    expect(packet.recommendedDetermination).toBe("substantiated");
+    expect(packet.leadingHypothesis.id).toBe("H1");
+    expect(packet.achResult.ranking).toBeTruthy();
+    expect(packet.sensitivity).toBeTruthy();
+    expect(packet.keyAssumptions).toBeTruthy();
+    expect(packet.aiRationale).toContain("pull log");
+    // The AI never makes the call itself, no matter what it recommended.
+    expect(packet.humanFinalDetermination).toBe("pending");
+  });
+
+  it("12. interrupt/checkpoint/resume still works: fresh checkpointer instance restores paused state", async () => {
+    const hypotheses = [hyp("H1", "Diversion"), hyp("H2", "Documentation error")];
+    const model = makeFakeModel({
+      evidenceResponses: [extraction({
+        evidenceItems: [ev("E1", 1, 1)],
+        hypotheses,
+        achMatrix: [row("E1", { H1: "consistent", H2: "neutral" })],
+        unresolvedQuestions: ["Open question"],
+      })],
+      actionResponses: [action()],
+    });
+    await invoke("case-12", model, { caseId: "case-12", caseNotes: CASE_NOTES });
+    expect(existsSync(dbPath)).toBe(true);
+
+    const snapshot = await getState("case-12", model);
+    expect(snapshot.next).toContain("humanActionInterrupt");
+    expect(snapshot.values.currentNextBestAction.evidenceOrPersonNeeded).toBe("Nurse Alvarez");
+    expect(snapshot.values.caseId).toBe("case-12");
+  });
+
+  it("keeps the anti-repetition guard: retries with corrective feedback when the model tries to repeat a completed action", async () => {
+    const hypotheses = [hyp("H1", "Diversion")];
+    const model = makeFakeModel({
+      evidenceResponses: [
+        extraction({ evidenceItems: [ev("E1", 1, 1)], hypotheses, achMatrix: [row("E1", { H1: "consistent" })], unresolvedQuestions: ["Q1"] }),
+        extraction({ evidenceItems: [ev("E1", 1, 1)], hypotheses, achMatrix: [row("E1", { H1: "consistent" })], unresolvedQuestions: ["Q1"] }),
+      ],
+      actionResponses: [
+        action(),
+        action(), // repeats the same action — the guard must catch this
+        action({ evidenceOrPersonNeeded: "Shift supervisor" }), // corrected retry
+      ],
+    });
+    await invoke("case-13", model, { caseId: "case-13", caseNotes: CASE_NOTES });
+    await invoke("case-13", model, new Command({ resume: { resultType: "interview_notes", text: "Alvarez did not see the second tablet administered." } }));
+
+    expect(model._calls.actionCalls).toHaveLength(3);
+    const snapshot = await getState("case-13", model);
+    expect(snapshot.values.currentNextBestAction.evidenceOrPersonNeeded).toBe("Shift supervisor");
   });
 
   it("halts on a model schema failure instead of silently accepting garbage", async () => {
-    const model = makeFakeModel({
-      evidenceAnalysisResponses: [new Error("structured output failed schema validation after retries")],
-      nextActionResponses: [],
-    });
-    const result = await invoke("case-6", model, { caseId: "case-6", caseNotes: CASE_NOTES });
+    const model = makeFakeModel({ evidenceResponses: [new Error("structured output failed schema validation after retries")] });
+    const result = await invoke("case-14", model, { caseId: "case-14", caseNotes: CASE_NOTES });
 
     expect(result.graphStatus).toBe("error");
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0].node).toBe("analyzeEvidence");
-    // The channel was never written to — nothing fabricated in place of the
-    // failed call.
-    expect(result.evidenceItems ?? []).toEqual([]);
-    const snapshot = await getState("case-6", model);
-    expect(snapshot.next).toEqual([]); // graph halted, not paused waiting for a human
+    const snapshot = await getState("case-14", model);
+    expect(snapshot.next).toEqual([]);
   });
 
   it("rejects malformed human input instead of blending it into the case", async () => {
+    const hypotheses = [hyp("H1", "Diversion")];
     const model = makeFakeModel({
-      evidenceAnalysisResponses: [evidenceAnalysisResponse({ unresolvedIds: ["key_witnesses"] })],
-      nextActionResponses: [nextAction()],
+      evidenceResponses: [extraction({ evidenceItems: [ev("E1", 1, 1)], hypotheses, achMatrix: [row("E1", { H1: "consistent" })], unresolvedQuestions: ["Q1"] })],
+      actionResponses: [action()],
     });
-    await invoke("case-7", model, { caseId: "case-7", caseNotes: CASE_NOTES });
-    const beforeNotes = (await getState("case-7", model)).values.caseNotes;
+    await invoke("case-15", model, { caseId: "case-15", caseNotes: CASE_NOTES });
+    const beforeNotes = (await getState("case-15", model)).values.caseNotes;
 
-    // A malformed resume payload reaching the graph directly (bypassing the
-    // API route's own HumanResultZ validation) — e.g. an unknown resultType
-    // and empty text — must be caught by ingestHumanResult's own guard, not
-    // silently appended to the case.
-    const result = await invoke("case-7", model, new Command({ resume: { resultType: "not_a_real_type", text: "" } }));
+    const result = await invoke("case-15", model, new Command({ resume: { resultType: "not_a_real_type", text: "" } }));
 
     expect(result.graphStatus).toBe("error");
     expect(result.errors.at(-1).node).toBe("ingestHumanResult");
     expect(result.errors.at(-1).message).toContain("Malformed human input");
-    expect(result.caseNotes).toBe(beforeNotes); // never silently blended in
-    expect(result.humanInputs ?? []).toEqual([]); // nothing recorded either
-  });
-
-  it("evidence invalidation reopens a previously satisfied sufficiency check", async () => {
-    const model = makeFakeModel({
-      evidenceAnalysisResponses: [
-        // Round 1: objective_records satisfied, citing E1.
-        evidenceAnalysisResponse({
-          unresolvedIds: ["key_witnesses"],
-          evidenceItems: [{ id: "E1", sourceLabel: "Case notes", lineStart: 1, lineEnd: 1, type: "system_record", stance: "supports", summary: "Cabinet log shows the withdrawal." }],
-          checkOverrides: { objective_records: { evidenceIds: ["E1"] } },
-        }),
-        // Round 2 (after new human evidence): the model no longer returns
-        // E1 among evidenceItems (superseded/dropped), but still reports
-        // objective_records as satisfied citing it. hydrateEvidenceTraceability
-        // must reopen that check rather than trust the stale citation.
-        evidenceAnalysisResponse({
-          unresolvedIds: ["key_witnesses"],
-          evidenceItems: [],
-          checkOverrides: { objective_records: { evidenceIds: ["E1"] } },
-        }),
-      ],
-      nextActionResponses: [nextAction(), nextAction({ evidenceOrPersonNeeded: "Shift supervisor" })],
-    });
-
-    await invoke("case-8", model, { caseId: "case-8", caseNotes: CASE_NOTES });
-    const beforeSnapshot = await getState("case-8", model);
-    const beforeCheck = beforeSnapshot.values.sufficiencyChecks.find((c) => c.id === "objective_records");
-    expect(beforeCheck.status).toBe("satisfied");
-
-    await invoke("case-8", model, new Command({ resume: { resultType: "response", text: "Additional context provided." } }));
-    const afterSnapshot = await getState("case-8", model);
-    const afterCheck = afterSnapshot.values.sufficiencyChecks.find((c) => c.id === "objective_records");
-
-    expect(afterCheck.status).toBe("unresolved");
-    expect(afterCheck.rationale).toMatch(/reopened/i);
-    expect(afterCheck.evidenceIds).toEqual([]);
-  });
-
-  it("captures a hypothesis contradicted by newly incorporated evidence", async () => {
-    const model = makeFakeModel({
-      evidenceAnalysisResponses: [
-        evidenceAnalysisResponse({
-          unresolvedIds: ["key_witnesses"],
-          hypotheses: [{ id: "H1", label: "Authorized double administration", description: "The nurse was authorized to give two tablets.", state: "supported", supportingEvidenceIds: [], contradictingEvidenceIds: [], unresolvedQuestions: [] }],
-        }),
-        // A hypothesis's state is re-derived from actual evidence
-        // citations, never trusted from the model's own label — so the
-        // contradiction must be grounded in a real evidence item.
-        evidenceAnalysisResponse({
-          unresolvedIds: [],
-          evidenceItems: [{ id: "E2", sourceLabel: "Case notes", lineStart: 1, lineEnd: 1, type: "document", stance: "contradicts", summary: "The medication order authorized only one tablet." }],
-          hypotheses: [{ id: "H1", label: "Authorized double administration", description: "The nurse was authorized to give two tablets.", state: "contradicted", supportingEvidenceIds: [], contradictingEvidenceIds: ["E2"], unresolvedQuestions: [] }],
-        }),
-      ],
-      nextActionResponses: [nextAction()],
-    });
-
-    await invoke("case-9", model, { caseId: "case-9", caseNotes: CASE_NOTES });
-    await invoke("case-9", model, new Command({ resume: { resultType: "document", text: "The order authorized only one tablet; no order for a second exists." } }));
-
-    const snapshot = await getState("case-9", model);
-    expect(snapshot.values.hypotheses.find((h) => h.id === "H1").state).toBe("contradicted");
+    expect(result.caseNotes).toBe(beforeNotes);
+    expect(result.humanInputs ?? []).toEqual([]);
   });
 });

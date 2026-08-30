@@ -1,15 +1,23 @@
 import { Annotation, StateGraph, START, END, interrupt } from "@langchain/langgraph";
 import { ChatAnthropic } from "@langchain/anthropic";
-import { hydrateEvidenceTraceability, numberReportLines } from "../lib/investigation-utils.js";
-import { normalizeSufficiencyChecks } from "../routes/analyze-report.js";
-import { EvidenceAnalysisZ, NextActionZ, HumanResultZ } from "./schemas.js";
+import { validateEvidenceItems, groundFindings, numberReportLines } from "../lib/investigation-utils.js";
+import { evidenceForAgainst, scoreAch, sensitivityAnalysis } from "../lib/ach.js";
+import { categorizeAssumption } from "../lib/key-assumptions-check.js";
+import { computeInvestigationStatus, identifyInvestigativeGaps, rankGaps } from "../lib/investigative-gaps.js";
+import {
+  EvidenceExtractionZ,
+  KeyAssumptionsCheckZ,
+  NextActionZ,
+  FinalRecommendationZ,
+  HumanResultZ,
+} from "./schemas.js";
 
 // --- State -------------------------------------------------------------
-// caseId/caseObjective/allegations/organizationContext are investigator-
-// supplied case framing. evidenceItems/findings/hypotheses/sufficiencyChecks
-// /closureAssessment are produced by the transplanted legacy logic. The
-// rest is graph bookkeeping (no signature, no client-echoed round-trip —
-// the checkpointer is the only thing carrying any of this between calls).
+// The investigation reasoning is Analysis of Competing Hypotheses (ACH) +
+// Key Assumptions Check (KAC), not the old 8-sufficiency-check brain — see
+// THIRD_PARTY_NOTICES.md for the upstream methodology this adapts. Nothing
+// here is a signature or a client-echoed round-trip; the checkpointer is
+// the only thing carrying any of this between calls.
 export const InvestigationState = Annotation.Root({
   caseId: Annotation({ default: () => "" }),
   caseObjective: Annotation({ default: () => "" }),
@@ -19,14 +27,16 @@ export const InvestigationState = Annotation.Root({
 
   evidenceItems: Annotation({ default: () => [] }),
   findings: Annotation({ default: () => [] }),
-  hypotheses: Annotation({ default: () => [] }),
-  sufficiencyChecks: Annotation({ default: () => [] }),
-  closureAssessment: Annotation({ default: () => null }),
+  hypotheses: Annotation({ default: () => [] }), // [{id, label, description}]
+  achMatrix: Annotation({ default: () => [] }), // [{evidenceId, marks: {hypothesisId: mark}}]
+  achResult: Annotation({ default: () => null }), // {ranking, diagnosticity, mostDiagnosticEvidenceIds, mostDiagnosticSpread}
+  sensitivity: Annotation({ default: () => null }), // {currentLeaderId, pivotalEvidenceIds, flips}
+  keyAssumptions: Annotation({ default: () => [] }), // KeyAssumptionZ[] + computed `category`
   unresolvedQuestions: Annotation({ default: () => [] }),
-  // "incomplete" | "provisional" | "ready_for_review" — set by
-  // assessSufficiency from closureAssessment.status. Kept as its own field
-  // (not re-derived ad hoc) so the UI reads one clear value instead of
-  // re-interpreting the closure gate itself.
+  investigativeGaps: Annotation({ default: () => [] }),
+  // "incomplete" | "ready_with_limitations" | "ready_for_review" — computed
+  // by computeInvestigationStatus from investigativeGaps, never announced
+  // by the model.
   investigationStatus: Annotation({ default: () => null }),
 
   currentNextBestAction: Annotation({ default: () => null }),
@@ -41,63 +51,94 @@ export const InvestigationState = Annotation.Root({
   // read by the UI directly, cleared once ingested.
   pendingHumanResult: Annotation({ default: () => null }),
 
+  finalRecommendation: Annotation({ default: () => null }),
+
   lastAnalysisAt: Annotation({ default: () => null }),
   graphStatus: Annotation({ default: () => "new" }),
   errors: Annotation({ default: () => [] }),
   warnings: Annotation({ default: () => [] }),
 });
 
-const ANALYZE_EVIDENCE_PROMPT = `You are the evidence-analysis stage of a healthcare compliance investigation assistant leading a real investigation. You do NOT make employment decisions and you do NOT write a final report — you build the evidence map, test competing explanations, surface unresolved questions, and assess whether enough is known yet.
+const EVIDENCE_EXTRACTION_PROMPT = `You are the evidence-and-hypothesis stage of a healthcare compliance investigation assistant leading a real investigation, using Analysis of Competing Hypotheses (Heuer, CIA).
 
 ABSOLUTE EVIDENCE RULES:
 - The case notes arrive with immutable line labels like [L0001]. Every case-specific factual claim must trace to those lines.
 - Create evidenceItems only for actual information in the notes. Cite lineStart/lineEnd; never invent a source, interview, audit, policy, date, witness, or record.
+- Only grade sourceReliability/informationCredibility when you actually have a basis (a track record for the source, or corroboration for the item); otherwise leave them null. Never use these to judge a person's honesty — they grade the RECORD, not the witness.
 - A finding must reference evidence item IDs. Record contradictory evidence instead of hiding it.
-- Organization policy context, when provided, is CONTEXT for interpreting the case — never treat it as a case fact, and never invent policy provisions not given to you.
 
-HYPOTHESIS-DRIVEN INVESTIGATION RULES:
-- Build 1-6 competing hypotheses. Include the allegation/violation hypothesis and, when the notes actually support or leave room for one, the strongest plausible innocent, authorized, mistaken, or alternative explanation. A single hypothesis is appropriate once alternatives have been genuinely eliminated by the evidence — do not invent one merely for balance.
-- Do NOT assign percentages, probabilities, odds, or pseudo-scientific confidence. Use only: supported, partially_supported, weakened, unresolved, contradicted.
-- List unresolvedQuestions: the specific material questions the evidence so far does not answer. Do not pad this list — omit it (empty array) once nothing material remains open.
+HYPOTHESES:
+- List every materially plausible explanation (aim for 2-6): the allegation itself, and any innocent, authorized, mistaken, or alternative explanation genuinely left open by the notes. Do NOT invent a hypothesis the evidence has already eliminated, and do NOT force a false "balance" when only one explanation remains plausible.
+- Do NOT assign percentages, probabilities, odds, or confidence scores to any hypothesis.
 
-INVESTIGATION SUFFICIENCY:
-- Return EXACTLY one check for each of these IDs: finding_support, contradictory_evidence, objective_records, key_witnesses, material_inconsistencies, policy_regulatory_context, standard_of_proof, reporting_escalation.
-- material=true only when the unresolved issue could reasonably change the finding or whether the case can fairly close.
-- resolvable=true only when a realistic remaining investigative step could still answer the issue.
-- evidenceIds must list the evidence item IDs this check's status is actually based on; leave empty only when no evidence bears on the check yet.
-- Do not decide overall closure yourself — that is computed deterministically from your checks.`;
+ACH MATRIX (build this — it is the actual method, not a summary):
+- For EVERY evidence item, grade its consistency against EVERY hypothesis, graded in isolation from the other cells: "if this hypothesis were true, would this evidence surprise me?"
+- Marks: strongly_consistent, consistent, neutral, inconsistent, strongly_inconsistent, not_applicable.
+- Grade evidence primarily by what it is INCONSISTENT with, not by counting confirmations — the point of ACH is to find what each hypothesis contradicts, not what it agrees with.
 
-const RECOMMEND_ACTION_PROMPT = `You are the Next Best Investigative Action stage of a compliance investigation assistant leading a real investigation. Given the current evidence, findings, competing explanations, and unresolved sufficiency checks, recommend exactly ONE next investigative action — the single most useful thing to do next, not a list of options.
+unresolvedQuestions: material questions the evidence so far does not answer. Do not pad this list — omit an entry once nothing material remains open on it.`;
 
-Prefer objective evidence (an audit log, a system access record, a timestamp) over an interview when an untried objective record could resolve the same open question. Prefer an interview when the open question is fundamentally about a person's knowledge, intent, or authorization, or when no record plausibly exists. Prefer comparing evidence against a specific policy provision when organization policy context is available and the open question is whether conduct was authorized or against policy.
+const KEY_ASSUMPTIONS_PROMPT = `You are the Key Assumptions Check stage. A leading explanation has been identified by Analysis of Competing Hypotheses scoring (fewest weighted inconsistencies). Surface the premises — explicit AND unstated — that this leading explanation depends on.
+
+For each assumption:
+- assumptionType: implicit (unstated), boundary (holds only within some scope), absence_of_evidence ("no report of X means X didn't happen" — silence is not evidence), or explicit (stated in the notes).
+- grounding: weak (no real support), partial (some support or scope-limited), or strong (evidence-backed).
+- sensitivity: how much the conclusion would change if this assumption were wrong (low/medium/high).
+- disposition: re-source (go verify it), test (a concrete step would test it), bound (the conclusion should be scoped to where it holds — likely not resolvable further), or flag (document as an unresolved limitation — likely not resolvable further).
+
+Do not rate everything medium to dodge the hard call. Do not treat consensus ("everyone assumes X") as grounding.`;
+
+const RECOMMEND_ACTION_PROMPT = `You are the Next Best Investigative Action stage. You are given a ranked shortlist of investigative gaps computed from the structured analysis (Analysis of Competing Hypotheses + Key Assumptions Check) — pivotal evidence the ranking hinges on, unresolved contradictions against the leading explanation, weak load-bearing assumptions, and other open questions, ordered by how much each could realistically change or discriminate the current conclusion.
+
+Pick exactly ONE candidate from the shortlist (set targetGapId to its id) and turn it into one concrete action. Prefer objective evidence (a record, a log, a timestamp) over an interview when an untried objective record could resolve it. Prefer an interview when the open question is about a person's knowledge, intent, or authorization. Prefer comparing to a specific policy provision when organization policy context is available and relevant.
 
 If the action is an interview, populate suggestedQuestions with a short, focused list. If it is a document/record/log request, populate documentRequest with exactly what to obtain.
 
-Never recommend an action that matches one already marked completed below — pick something that has not already been tried, or return actionType NO_FURTHER_REASONABLE_ACTION if nothing else is realistically obtainable.`;
+Never recommend an action that matches one already attempted below — pick a different candidate, or return actionType NO_FURTHER_REASONABLE_ACTION if nothing on the shortlist is realistically obtainable.`;
 
-function buildEvidenceAnalysisUserMessage(state) {
-  const contextBlock = [
+const FINAL_RECOMMENDATION_PROMPT = `You are drafting the final AI recommendation for human review. No material, reasonably-resolvable investigative gap remains — the structured analysis (ACH ranking, sensitivity, key assumptions) is provided below.
+
+Only use "substantiated", "unsubstantiated", or "inconclusive" for recommendedDetermination when the case objective or supplied context actually calls for that kind of determination. Never invent an organization's legal or disciplinary standard — if none was supplied and the framing does not call for one, use "not_applicable" and frame the rationale around what the evidence shows instead.
+
+This is a RECOMMENDATION, not a decision — a human makes the final determination. Write the rationale so it stands on the ACH ranking and key assumptions actually given to you, not on anything outside them.`;
+
+function contextBlock(state) {
+  return [
     state.caseObjective ? `Case objective: ${state.caseObjective}` : null,
     state.allegations ? `Allegation / issue being investigated: ${state.allegations}` : null,
     state.organizationContext ? `--- ORGANIZATION POLICY CONTEXT (context only, not case facts) ---\n${state.organizationContext}` : null,
   ].filter(Boolean).join("\n\n");
-
-  return `${contextBlock ? `${contextBlock}\n\n` : ""}Analyze the line-numbered investigation notes below. Build an evidence map, test competing hypotheses, list unresolved material questions, and complete all eight sufficiency checks.\n\n--- CASE NOTES ---\n${numberReportLines(state.caseNotes)}\n--- END CASE NOTES ---`;
 }
 
-function describeCompletedActions(actionHistory) {
-  const completed = (actionHistory || []).filter((a) => a.status === "completed" || a.status === "unavailable");
-  if (completed.length === 0) return "None yet.";
-  return completed.map((a) => `- [${a.status}] ${a.actionType}: ${a.evidenceOrPersonNeeded}`).join("\n");
+function buildEvidenceExtractionUserMessage(state) {
+  const ctx = contextBlock(state);
+  return `${ctx ? `${ctx}\n\n` : ""}Analyze the line-numbered investigation notes below. Extract evidence, build the competing hypotheses, and complete the full ACH matrix (every evidence item x every hypothesis).\n\n--- CASE NOTES ---\n${numberReportLines(state.caseNotes)}\n--- END CASE NOTES ---`;
 }
 
-function buildRecommendActionUserMessage(state) {
-  const contextBlock = [
-    state.caseObjective ? `Case objective: ${state.caseObjective}` : null,
-    state.organizationContext ? `Organization policy context is available and may be relevant.` : null,
-  ].filter(Boolean).join("\n");
+function buildKeyAssumptionsUserMessage(state) {
+  const leader = state.achResult.ranking[0];
+  const { supportingEvidenceIds, contradictingEvidenceIds } = evidenceForAgainst(state.achMatrix, leader.hypothesisId);
+  const describeEvidence = (ids) => ids.map((id) => {
+    const ev = state.evidenceItems.find((e) => e.id === id);
+    return ev ? `${id}: ${ev.summary}` : id;
+  });
+  return `Leading explanation (fewest weighted inconsistencies): ${leader.label}\n\nEvidence consistent with it:\n${JSON.stringify(describeEvidence(supportingEvidenceIds), null, 2)}\n\nEvidence inconsistent with it (loose ends):\n${JSON.stringify(describeEvidence(contradictingEvidenceIds), null, 2)}\n\nCase objective: ${state.caseObjective}`;
+}
 
-  return `${contextBlock ? `${contextBlock}\n\n` : ""}Unresolved sufficiency checks:\n${JSON.stringify(state.sufficiencyChecks.filter((c) => c.status === "unresolved"), null, 2)}\n\nUnresolved questions:\n${JSON.stringify(state.unresolvedQuestions, null, 2)}\n\nCurrent findings:\n${JSON.stringify(state.findings, null, 2)}\n\nCompeting explanations:\n${JSON.stringify(state.hypotheses, null, 2)}\n\nActions already attempted (do not repeat these):\n${describeCompletedActions(state.actionHistory)}`;
+function describeAttemptedActions(actionHistory) {
+  const attempted = (actionHistory || []).filter((a) => a.status === "completed" || a.status === "unavailable");
+  if (attempted.length === 0) return "None yet.";
+  return attempted.map((a) => `- [${a.status}] ${a.actionType}: ${a.evidenceOrPersonNeeded}`).join("\n");
+}
+
+function buildRecommendActionUserMessage(state, candidates) {
+  const ctx = contextBlock(state);
+  return `${ctx ? `${ctx}\n\n` : ""}Ranked candidate investigative gaps (most diagnostic first):\n${JSON.stringify(candidates, null, 2)}\n\nActions already attempted (do not repeat these):\n${describeAttemptedActions(state.actionHistory)}`;
+}
+
+function buildFinalRecommendationUserMessage(state) {
+  const ctx = contextBlock(state);
+  return `${ctx ? `${ctx}\n\n` : ""}ACH ranking (fewest weighted inconsistencies first):\n${JSON.stringify(state.achResult.ranking, null, 2)}\n\nSensitivity: ${JSON.stringify(state.sensitivity, null, 2)}\n\nKey assumptions behind the leading explanation:\n${JSON.stringify(state.keyAssumptions, null, 2)}\n\nRemaining limitations (not reasonably resolvable further):\n${JSON.stringify(state.investigativeGaps, null, 2)}`;
 }
 
 // Deterministic anti-repetition check — never trusted to the model's memory
@@ -120,83 +161,73 @@ function pushError(state, node, error) {
   };
 }
 
-// closureAssessment.status ("not_ready_to_close" | "ready_with_unresolved_limitations"
-// | "ready_to_close", from the transplanted deriveClosureAssessment) maps to
-// the three-way distinction the spec requires the graph to make explicit.
-function mapInvestigationStatus(closureStatus) {
-  if (closureStatus === "ready_to_close") return "ready_for_review";
-  if (closureStatus === "ready_with_unresolved_limitations") return "provisional";
-  return "incomplete";
-}
-
-function buildReviewSummary(state) {
-  return {
-    caseObjective: state.caseObjective,
-    investigationStatus: state.investigationStatus,
-    whatEvidenceSupports: state.findings.map((f) => ({ id: f.id, statement: f.statement, evidenceStatus: f.evidenceStatus })),
-    whatRemainsUncertain: [
-      ...state.unresolvedQuestions,
-      ...state.sufficiencyChecks.filter((c) => c.status === "unresolved").map((c) => c.rationale),
-    ],
-    competingExplanations: state.hypotheses.map((h) => ({ id: h.id, label: h.label, state: h.state })),
-    evidentiaryLimitations: state.closureAssessment?.unresolvedMaterialIssues || [],
-    closureAssessment: state.closureAssessment,
-  };
-}
-
 // model is injectable so tests can supply a fake instead of a real provider
 // call — same "structured for testability" posture as the legacy path's
 // callStructuredWithRetry tests.
 export function buildInvestigationGraph({ model } = {}) {
-  // Lazy and memoized: constructing ChatAnthropic() eagerly here would
-  // require an API key even for routes that never call the model at all
-  // (GET /state, or POST /resume/​/start short-circuiting on an
-  // already-existing/missing case). The real client is only built the
-  // first time a node that actually needs it runs.
+  // Lazy and memoized: constructing ChatAnthropic() eagerly would require an
+  // API key even for routes that never call the model at all (GET /state,
+  // or POST /resume//start short-circuiting on an already-existing/missing
+  // case). The real client is only built the first time a node that
+  // actually needs it runs.
   let chatModel;
-  let evidenceAnalysisModel;
-  let nextActionModel;
+  const structuredModels = new Map();
   function getChatModel() {
     if (!chatModel) chatModel = model || new ChatAnthropic({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5" });
     return chatModel;
   }
-  function getEvidenceAnalysisModel() {
-    if (!evidenceAnalysisModel) evidenceAnalysisModel = getChatModel().withStructuredOutput(EvidenceAnalysisZ);
-    return evidenceAnalysisModel;
-  }
-  function getNextActionModel() {
-    if (!nextActionModel) nextActionModel = getChatModel().withStructuredOutput(NextActionZ);
-    return nextActionModel;
+  function structuredModel(schema) {
+    if (!structuredModels.has(schema)) structuredModels.set(schema, getChatModel().withStructuredOutput(schema));
+    return structuredModels.get(schema);
   }
 
-  // Shared by the analyzeEvidence and reanalyze nodes: the spec calls these
-  // out as two named steps in the loop (first pass vs. after new human
-  // evidence), but the reasoning they run is identical — re-run evidence
-  // grounding against the current authoritative case notes. Registering the
-  // same handler under two node names keeps the graph's explicit topology
-  // without duplicating the prompt/call logic.
+  // Shared by analyzeEvidence and reanalyze: the graph names these as two
+  // steps in the loop (first pass vs. after new human evidence), but the
+  // reasoning is identical — re-run evidence extraction, hypothesis
+  // building, and the ACH matrix against the current authoritative case
+  // notes. Registering the same handler under two node names keeps the
+  // graph's explicit topology without duplicating the prompt/call logic.
   async function runEvidenceAnalysis(state) {
     let raw;
     try {
-      raw = await getEvidenceAnalysisModel().invoke([
-        { role: "system", content: ANALYZE_EVIDENCE_PROMPT },
-        { role: "user", content: buildEvidenceAnalysisUserMessage(state) },
+      raw = await structuredModel(EvidenceExtractionZ).invoke([
+        { role: "system", content: EVIDENCE_EXTRACTION_PROMPT },
+        { role: "user", content: buildEvidenceExtractionUserMessage(state) },
       ]);
     } catch (error) {
       // A model response failing schema validation must not be silently
       // accepted — record it and halt the graph rather than proceeding on
-      // garbage. withStructuredOutput throws (after its own internal
-      // retries) when it cannot get valid structured output.
+      // garbage.
       return pushError(state, "analyzeEvidence", error);
     }
-    const normalized = { ...raw, sufficiencyChecks: normalizeSufficiencyChecks(raw.sufficiencyChecks) };
-    const hydrated = hydrateEvidenceTraceability(normalized, state.caseNotes);
+
+    const evidenceItems = validateEvidenceItems(raw.evidenceItems, state.caseNotes);
+    const findings = groundFindings(raw.findings, evidenceItems);
+    const validEvidenceIds = new Set(evidenceItems.map((e) => e.id));
+    const validHypothesisIds = new Set((raw.hypotheses || []).map((h) => h.id));
+
+    // Invalidated evidence must change the analysis: an ACH matrix row that
+    // cites evidence which failed citation validation is dropped entirely,
+    // not kept with a stale mark — the same "strip, don't repair" posture
+    // as evidence citations themselves.
+    const achMatrix = (raw.achMatrix || [])
+      .filter((row) => validEvidenceIds.has(row.evidenceId))
+      .map((row) => ({
+        evidenceId: row.evidenceId,
+        marks: Object.fromEntries(Object.entries(row.marks || {}).filter(([hid]) => validHypothesisIds.has(hid))),
+      }));
+
+    const hypotheses = raw.hypotheses || [];
+    const achResult = hypotheses.length > 0 ? scoreAch(hypotheses, achMatrix) : { ranking: [], diagnosticity: [], mostDiagnosticEvidenceIds: [], mostDiagnosticSpread: 0 };
+    const sensitivity = hypotheses.length > 1 ? sensitivityAnalysis(hypotheses, achMatrix) : { currentLeaderId: hypotheses[0]?.id || null, pivotalEvidenceIds: [], flips: [] };
+
     return {
-      evidenceItems: hydrated.evidenceItems,
-      findings: hydrated.findings,
-      hypotheses: hydrated.hypotheses,
-      sufficiencyChecks: hydrated.sufficiencyChecks,
-      closureAssessment: hydrated.closureAssessment,
+      evidenceItems,
+      findings,
+      hypotheses,
+      achMatrix,
+      achResult,
+      sensitivity,
       unresolvedQuestions: Array.isArray(raw.unresolvedQuestions) ? raw.unresolvedQuestions : [],
       lastAnalysisAt: new Date().toISOString(),
       graphStatus: "analyzed",
@@ -204,43 +235,68 @@ export function buildInvestigationGraph({ model } = {}) {
   }
 
   function afterAnalysisRouter(state) {
-    return state.graphStatus === "error" ? END : "assessSufficiency";
+    return state.graphStatus === "error" ? END : "assessKeyAssumptions";
   }
 
-  // Pure/deterministic — no model call. Makes the three-way sufficiency
-  // distinction ("investigation incomplete" / "enough for a provisional
-  // determination" / "ready for human closure review") an explicit state
-  // field, rather than leaving callers to re-derive it from the closure gate.
-  function assessSufficiency(state) {
-    const investigationStatus = mapInvestigationStatus(state.closureAssessment?.status);
+  async function assessKeyAssumptions(state) {
+    if (!state.achResult?.ranking?.length) {
+      return { keyAssumptions: [] };
+    }
+    let raw;
+    try {
+      raw = await structuredModel(KeyAssumptionsCheckZ).invoke([
+        { role: "system", content: KEY_ASSUMPTIONS_PROMPT },
+        { role: "user", content: buildKeyAssumptionsUserMessage(state) },
+      ]);
+    } catch (error) {
+      return pushError(state, "assessKeyAssumptions", error);
+    }
+    // Category is computed deterministically from grounding x sensitivity —
+    // never trusted from the model's own label.
+    const keyAssumptions = (raw.keyAssumptions || []).map((a) => ({ ...a, category: categorizeAssumption(a.grounding, a.sensitivity) }));
+    return { keyAssumptions, graphStatus: "assumptions_checked" };
+  }
+
+  function afterAssumptionsRouter(state) {
+    return state.graphStatus === "error" ? END : "computeReadiness";
+  }
+
+  // Pure/deterministic — no model call. Replaces the old 8-sufficiency-
+  // check closure brain: readiness is computed from investigativeGaps
+  // (themselves derived from ACH sensitivity + unresolved contradictions +
+  // key uncertainties), never announced by the model.
+  function computeReadiness(state) {
+    const investigativeGaps = identifyInvestigativeGaps(state);
+    const investigationStatus = computeInvestigationStatus(investigativeGaps);
     return {
+      investigativeGaps,
       investigationStatus,
       graphStatus: investigationStatus === "incomplete" ? "awaiting_next_action" : "awaiting_human_review",
     };
   }
 
-  function afterSufficiencyRouter(state) {
-    if (state.graphStatus === "error") return END;
+  function afterReadinessRouter(state) {
     return state.investigationStatus === "incomplete" ? "recommendNextBestAction" : "readyForHumanReview";
   }
 
   async function recommendNextBestAction(state) {
+    const candidates = rankGaps(state.investigativeGaps.filter((g) => g.resolvable)).slice(0, 5);
     const messages = [
       { role: "system", content: RECOMMEND_ACTION_PROMPT },
-      { role: "user", content: buildRecommendActionUserMessage(state) },
+      { role: "user", content: buildRecommendActionUserMessage(state, candidates) },
     ];
     let action;
     try {
-      action = await getNextActionModel().invoke(messages);
+      action = await structuredModel(NextActionZ).invoke(messages);
       if (matchesAttemptedAction(action, state.actionHistory)) {
         // One corrective retry with explicit feedback — same "tell it
         // exactly what was wrong" pattern as the legacy path's structured-
         // output retry, applied here to a repetition mistake instead of a
         // schema mistake. Bounded: accept the second attempt regardless.
-        action = await getNextActionModel().invoke([
+        action = await structuredModel(NextActionZ).invoke([
           ...messages,
           { role: "assistant", content: JSON.stringify(action) },
-          { role: "user", content: `That action (${action.actionType}: ${action.evidenceOrPersonNeeded}) was already attempted. Recommend a different, not-yet-attempted action, or NO_FURTHER_REASONABLE_ACTION if nothing else is realistically obtainable.` },
+          { role: "user", content: `That action (${action.actionType}: ${action.evidenceOrPersonNeeded}) was already attempted. Pick a different candidate from the shortlist, or NO_FURTHER_REASONABLE_ACTION if nothing else is realistically obtainable.` },
         ]);
       }
     } catch (error) {
@@ -250,7 +306,7 @@ export function buildInvestigationGraph({ model } = {}) {
       currentNextBestAction: action,
       actionHistory: [
         ...(state.actionHistory || []),
-        { actionType: action.actionType, evidenceOrPersonNeeded: action.evidenceOrPersonNeeded, status: "recommended" },
+        { actionType: action.actionType, evidenceOrPersonNeeded: action.evidenceOrPersonNeeded, targetGapId: action.targetGapId, status: "recommended" },
       ],
       graphStatus: "awaiting_human_action",
     };
@@ -277,9 +333,9 @@ export function buildInvestigationGraph({ model } = {}) {
 
   // Validates the resumed payload even though the API route already
   // validates it before ever issuing Command({resume}) — this is the
-  // second line of defense for anything that reaches the graph directly
-  // (a test, a future non-HTTP caller). Malformed input does not get
-  // silently accepted or blended into case notes.
+  // second line of defense for anything that reaches the graph directly.
+  // Malformed input does not get silently accepted or blended into case
+  // notes.
   function ingestHumanResult(state) {
     const parsed = HumanResultZ.safeParse(state.pendingHumanResult);
     if (!parsed.success) {
@@ -327,24 +383,58 @@ export function buildInvestigationGraph({ model } = {}) {
     return state.graphStatus === "error" ? END : "reanalyze";
   }
 
-  // Pauses again with a human-readable review packet. Case closure and
-  // discipline stay out of scope for this slice — the graph does not
-  // autonomously close the case. If this ever resumes, the response is
-  // just recorded as an acknowledgment; there is nowhere further to route.
-  function readyForHumanReview(state) {
+  // Pauses with the full final-recommendation packet. Case closure and
+  // discipline stay out of scope — the graph does not autonomously close
+  // the case; humanFinalDetermination is always "pending" until a human
+  // acts outside this graph. If this ever resumes, the response is just
+  // recorded as an acknowledgment; there is nowhere further to route.
+  async function readyForHumanReview(state) {
+    const leader = state.achResult.ranking[0] || null;
+    const { supportingEvidenceIds, contradictingEvidenceIds } = leader ? evidenceForAgainst(state.achMatrix, leader.hypothesisId) : { supportingEvidenceIds: [], contradictingEvidenceIds: [] };
+
+    let draft;
+    try {
+      draft = await structuredModel(FinalRecommendationZ).invoke([
+        { role: "system", content: FINAL_RECOMMENDATION_PROMPT },
+        { role: "user", content: buildFinalRecommendationUserMessage(state) },
+      ]);
+    } catch (error) {
+      return pushError(state, "readyForHumanReview", error);
+    }
+
+    const finalRecommendation = {
+      recommendedDetermination: draft.recommendedDetermination,
+      leadingHypothesis: leader ? state.hypotheses.find((h) => h.id === leader.hypothesisId) : null,
+      competingHypotheses: state.achResult.ranking.slice(1).map((r) => state.hypotheses.find((h) => h.id === r.hypothesisId)).filter(Boolean),
+      evidenceSupporting: supportingEvidenceIds,
+      evidenceContradicting: contradictingEvidenceIds,
+      mostDiagnosticEvidenceIds: state.achResult.mostDiagnosticEvidenceIds,
+      achResult: state.achResult,
+      sensitivity: state.sensitivity,
+      keyAssumptions: state.keyAssumptions,
+      remainingLimitations: state.investigativeGaps,
+      whatCouldChangeThis: draft.whatCouldChangeThis,
+      aiRationale: draft.rationale,
+      humanFinalDetermination: "pending",
+    };
+
     const ack = interrupt({
       kind: "ready_for_human_review",
-      ...buildReviewSummary(state),
-      message: "Investigation has reached a review point. This graph does not close the case automatically — a human decides.",
+      finalRecommendation,
+      investigationStatus: state.investigationStatus,
+      message: "Investigation has reached a review point. This is an AI recommendation, not a decision — the graph does not close the case automatically.",
     });
-    if (ack === undefined || ack === null) return {};
-    return { humanInputs: [...(state.humanInputs || []), { resultType: "review_acknowledgment", text: String(ack), respondingToAction: null, at: new Date().toISOString() }] };
+
+    const base = { finalRecommendation };
+    if (ack === undefined || ack === null) return base;
+    return { ...base, humanInputs: [...(state.humanInputs || []), { resultType: "review_acknowledgment", text: String(ack), respondingToAction: null, at: new Date().toISOString() }] };
   }
 
   const graph = new StateGraph(InvestigationState)
     .addNode("openCase", openCaseNode)
     .addNode("analyzeEvidence", runEvidenceAnalysis)
-    .addNode("assessSufficiency", assessSufficiency)
+    .addNode("assessKeyAssumptions", assessKeyAssumptions)
+    .addNode("computeReadiness", computeReadiness)
     .addNode("recommendNextBestAction", recommendNextBestAction)
     .addNode("humanActionInterrupt", humanActionInterrupt)
     .addNode("ingestHumanResult", ingestHumanResult)
@@ -352,12 +442,13 @@ export function buildInvestigationGraph({ model } = {}) {
     .addNode("readyForHumanReview", readyForHumanReview)
     .addEdge(START, "openCase")
     .addEdge("openCase", "analyzeEvidence")
-    .addConditionalEdges("analyzeEvidence", afterAnalysisRouter, ["assessSufficiency", END])
-    .addConditionalEdges("assessSufficiency", afterSufficiencyRouter, ["recommendNextBestAction", "readyForHumanReview", END])
+    .addConditionalEdges("analyzeEvidence", afterAnalysisRouter, ["assessKeyAssumptions", END])
+    .addConditionalEdges("assessKeyAssumptions", afterAssumptionsRouter, ["computeReadiness", END])
+    .addConditionalEdges("computeReadiness", afterReadinessRouter, ["recommendNextBestAction", "readyForHumanReview"])
     .addConditionalEdges("recommendNextBestAction", afterRecommendRouter, ["humanActionInterrupt", END])
     .addEdge("humanActionInterrupt", "ingestHumanResult")
     .addConditionalEdges("ingestHumanResult", afterIngestRouter, ["reanalyze", END])
-    .addConditionalEdges("reanalyze", afterAnalysisRouter, ["assessSufficiency", END])
+    .addConditionalEdges("reanalyze", afterAnalysisRouter, ["assessKeyAssumptions", END])
     .addEdge("readyForHumanReview", END);
 
   return graph;
@@ -367,8 +458,7 @@ export function buildInvestigationGraph({ model } = {}) {
 // Genuine idempotency (never re-running this against an already-open case)
 // is guaranteed one level up, by the API route: POST /start checks
 // graph.getState() first and only calls invoke() at all for a case that has
-// no existing checkpoint. This node's own job is just establishing sane
-// defaults from the initial input, which is safe to reason about regardless.
+// no existing checkpoint.
 function openCaseNode(state) {
   return {
     caseObjective: state.caseObjective || state.allegations || "Investigate the reported concern.",

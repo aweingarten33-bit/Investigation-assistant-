@@ -62,9 +62,10 @@ function interruptPayload(snapshot) {
 
 const PUBLIC_FIELDS = [
   "caseId", "caseObjective", "allegations", "organizationContext",
-  "evidenceItems", "findings", "hypotheses", "sufficiencyChecks",
-  "closureAssessment", "unresolvedQuestions", "investigationStatus",
-  "currentNextBestAction", "actionHistory", "completedActions", "humanInputs",
+  "evidenceItems", "findings", "hypotheses", "achMatrix", "achResult",
+  "sensitivity", "keyAssumptions", "unresolvedQuestions", "investigativeGaps",
+  "investigationStatus", "currentNextBestAction", "actionHistory",
+  "completedActions", "humanInputs", "finalRecommendation",
   "lastAnalysisAt", "graphStatus", "errors", "warnings",
 ];
 

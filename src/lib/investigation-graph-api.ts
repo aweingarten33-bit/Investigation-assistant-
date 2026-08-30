@@ -2,13 +2,7 @@
 // kept separate from src/lib/api.ts's callApi because that helper's route
 // union assumes a single fixed POST /api/<route> path, not a caseId-scoped
 // REST surface (start/resume/state).
-import type {
-  ClosureAssessment,
-  EvidenceItem,
-  InvestigationHypothesis,
-  SufficiencyCheck,
-  TraceableFinding,
-} from "@/lib/types";
+import type { EvidenceItem, TraceableFinding } from "@/lib/types";
 
 export type NextBestActionType =
   | "OBTAIN_RECORD" | "INTERVIEW" | "RESOLVE_CONTRADICTION" | "VERIFY_TIMELINE"
@@ -16,10 +10,10 @@ export type NextBestActionType =
   | "DOCUMENT_UNAVAILABLE_EVIDENCE" | "ESCALATE_FOR_HUMAN_REVIEW" | "NO_FURTHER_REASONABLE_ACTION";
 
 export interface NextBestAction {
+  targetGapId: string;
   actionType: NextBestActionType;
   action: string;
   whyThisIsNext: string;
-  evidenceGapAddressed: string;
   evidenceOrPersonNeeded: string;
   suggestedQuestions: string[];
   documentRequest: string;
@@ -27,11 +21,15 @@ export interface NextBestAction {
   whatCouldChangeBasedOnResult: string;
 }
 
-export type InvestigationStatus = "incomplete" | "provisional" | "ready_for_review";
+// incomplete: a resolvable material gap remains. ready_with_limitations:
+// material uncertainty remains but nothing further is reasonably
+// obtainable. ready_for_review: no material, resolvable gap remains.
+export type InvestigationStatus = "incomplete" | "ready_with_limitations" | "ready_for_review";
 
 export interface ActionHistoryEntry {
   actionType: NextBestActionType;
   evidenceOrPersonNeeded: string;
+  targetGapId?: string;
   status: "recommended" | "completed" | "unavailable";
 }
 
@@ -42,24 +40,97 @@ export interface HumanInputEntry {
   at: string;
 }
 
+// One row of the Analysis of Competing Hypotheses matrix.
+export interface AchMatrixRow {
+  evidenceId: string;
+  marks: Record<string, "strongly_consistent" | "consistent" | "neutral" | "inconsistent" | "strongly_inconsistent" | "not_applicable">;
+}
+
+export interface AchHypothesis {
+  id: string;
+  label: string;
+  description: string;
+}
+
+export interface AchRankingEntry {
+  hypothesisId: string;
+  label: string;
+  weightedInconsistency: number;
+  rawInconsistencyCount: number;
+}
+
+export interface AchResult {
+  ranking: AchRankingEntry[];
+  diagnosticity: { evidenceId: string; spread: number; flag: string | null }[];
+  mostDiagnosticEvidenceIds: string[];
+  mostDiagnosticSpread: number;
+}
+
+export interface SensitivityResult {
+  currentLeaderId: string | null;
+  pivotalEvidenceIds: string[];
+  flips: { evidenceId: string; newLeaderId: string }[];
+}
+
+export interface KeyAssumption {
+  id: string;
+  statement: string;
+  assumptionType: "implicit" | "boundary" | "absence_of_evidence" | "explicit";
+  grounding: "weak" | "partial" | "strong";
+  sensitivity: "low" | "medium" | "high";
+  disposition: "re-source" | "test" | "bound" | "flag";
+  dispositionNote: string;
+  category: "basically_solid" | "correct_with_caveats" | "unsupported_questionable" | "deprioritize";
+}
+
+export interface InvestigativeGap {
+  id: string;
+  gapType: "pivotal_evidence_needs_corroboration" | "unresolved_contradiction" | "unresolved_key_assumption" | "discriminating_evidence_missing";
+  description: string;
+  relatedEvidenceIds?: string[];
+  relatedHypothesisIds?: string[];
+  relatedAssumptionIds?: string[];
+  resolvable: boolean;
+}
+
+export interface FinalRecommendation {
+  recommendedDetermination: "substantiated" | "unsubstantiated" | "inconclusive" | "not_applicable";
+  leadingHypothesis: AchHypothesis | null;
+  competingHypotheses: AchHypothesis[];
+  evidenceSupporting: string[];
+  evidenceContradicting: string[];
+  mostDiagnosticEvidenceIds: string[];
+  achResult: AchResult;
+  sensitivity: SensitivityResult;
+  keyAssumptions: KeyAssumption[];
+  remainingLimitations: InvestigativeGap[];
+  whatCouldChangeThis: string;
+  aiRationale: string;
+  humanFinalDetermination: "pending";
+}
+
 export interface InvestigationCaseState {
   status: "paused" | "complete" | "error";
-  interrupt?: { kind: string; message: string; recommendedAction?: NextBestAction; [key: string]: unknown } | null;
+  interrupt?: { kind: string; message: string; recommendedAction?: NextBestAction; finalRecommendation?: FinalRecommendation; [key: string]: unknown } | null;
   caseId?: string;
   caseObjective?: string;
   allegations?: string;
   organizationContext?: string;
   evidenceItems?: EvidenceItem[];
   findings?: TraceableFinding[];
-  hypotheses?: InvestigationHypothesis[];
-  sufficiencyChecks?: SufficiencyCheck[];
-  closureAssessment?: ClosureAssessment;
+  hypotheses?: AchHypothesis[];
+  achMatrix?: AchMatrixRow[];
+  achResult?: AchResult;
+  sensitivity?: SensitivityResult;
+  keyAssumptions?: KeyAssumption[];
   unresolvedQuestions?: string[];
+  investigativeGaps?: InvestigativeGap[];
   investigationStatus?: InvestigationStatus;
   currentNextBestAction?: NextBestAction | null;
   actionHistory?: ActionHistoryEntry[];
   completedActions?: ActionHistoryEntry[];
   humanInputs?: HumanInputEntry[];
+  finalRecommendation?: FinalRecommendation | null;
   lastAnalysisAt?: string | null;
   graphStatus?: string;
   errors?: { node: string; message: string; at: string }[];

@@ -143,10 +143,9 @@ function CaseView({ caseId, state, onSubmitResult, submitting, onReset }: {
 }) {
   const action = state.currentNextBestAction;
   const isReviewReady = state.interrupt?.kind === "ready_for_human_review";
-  const whatRemains = [
-    ...(state.unresolvedQuestions || []),
-    ...((state.sufficiencyChecks || []).filter((c) => c.status === "unresolved").map((c) => c.rationale)),
-  ];
+  const whatRemains = (state.investigativeGaps || []).map((g) => g.description);
+  const leadingHypothesisId = state.achResult?.ranking?.[0]?.hypothesisId;
+  const rec = state.finalRecommendation;
 
   return (
     <div className="rounded-2xl bg-background neu-raised overflow-hidden">
@@ -208,35 +207,66 @@ function CaseView({ caseId, state, onSubmitResult, submitting, onReset }: {
           </section>
         )}
 
-        {isReviewReady && (
-          <section className="rounded-xl border border-border bg-secondary/20 p-4">
-            <h2 className="text-xs font-bold uppercase tracking-wide text-foreground mb-1.5">Ready for human review</h2>
-            <p className="text-sm text-muted-foreground mb-2">
-              {state.investigationStatus === "ready_for_review"
-                ? "The AI has not identified any further reasonable investigative step. This is not a determination — a human decides how to close this case."
-                : "Material uncertainty remains and is not realistically resolvable further, but a provisional determination is possible. A human decides how to proceed."}
-            </p>
-            {state.closureAssessment?.unresolvedMaterialIssues?.length ? (
-              <div className="mt-2">
-                <p className="text-xs font-semibold text-foreground mb-1">Evidentiary limitations</p>
+        {isReviewReady && rec && (
+          <section className="rounded-xl border border-border bg-secondary/20 p-4 space-y-3">
+            <div>
+              <h2 className="text-xs font-bold uppercase tracking-wide text-foreground mb-1.5">Ready for human review — AI recommendation</h2>
+              <p className="text-sm text-muted-foreground">
+                {state.investigationStatus === "ready_for_review"
+                  ? "No further reasonable investigative step was identified."
+                  : "Material uncertainty remains and is not realistically resolvable further; the AI is flagging this as a limitation, not resolving it."}
+                {" "}This is a recommendation, not a decision — a human makes the final call.
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-foreground">Recommended determination</p>
+              <p className="text-sm text-foreground uppercase">{rec.recommendedDetermination.replace(/_/g, " ")}</p>
+            </div>
+            {rec.leadingHypothesis && (
+              <div>
+                <p className="text-xs font-semibold text-foreground">Leading explanation</p>
+                <p className="text-sm text-foreground">{rec.leadingHypothesis.label}</p>
+              </div>
+            )}
+            <div>
+              <p className="text-xs font-semibold text-foreground">AI rationale</p>
+              <p className="text-sm text-foreground">{rec.aiRationale}</p>
+            </div>
+            {rec.remainingLimitations?.length ? (
+              <div>
+                <p className="text-xs font-semibold text-foreground mb-1">Remaining limitations / uncertainties</p>
                 <ul className="list-disc list-inside space-y-1 text-sm text-foreground">
-                  {state.closureAssessment.unresolvedMaterialIssues.map((issue, i) => <li key={i}>{issue}</li>)}
+                  {rec.remainingLimitations.map((g) => <li key={g.id}>{g.description}</li>)}
                 </ul>
               </div>
             ) : null}
+            <div>
+              <p className="text-xs font-semibold text-foreground">What could change this</p>
+              <p className="text-sm text-foreground">{rec.whatCouldChangeThis}</p>
+            </div>
+            <div className="border-t border-border pt-2">
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Human final determination</p>
+              <p className="text-sm text-foreground">Pending</p>
+            </div>
           </section>
         )}
 
         {state.hypotheses?.length ? (
           <section>
-            <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1.5">Competing explanations</h2>
+            <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1.5">Competing explanations (ACH ranking — fewest inconsistencies first)</h2>
             <ul className="space-y-1.5">
-              {state.hypotheses.map((h) => (
-                <li key={h.id} className="text-sm text-foreground">
-                  <span className="text-[10px] uppercase font-semibold text-muted-foreground mr-1.5">[{h.state}]</span>
-                  {h.label}
-                </li>
-              ))}
+              {(state.achResult?.ranking || []).map((r) => {
+                const h = state.hypotheses?.find((item) => item.id === r.hypothesisId);
+                if (!h) return null;
+                return (
+                  <li key={h.id} className="text-sm text-foreground">
+                    <span className="text-[10px] uppercase font-semibold text-muted-foreground mr-1.5">
+                      {h.id === leadingHypothesisId ? "[leading]" : `[weighted-I ${r.weightedInconsistency.toFixed(2)}]`}
+                    </span>
+                    {h.label}
+                  </li>
+                );
+              })}
             </ul>
           </section>
         ) : null}

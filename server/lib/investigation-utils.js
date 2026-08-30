@@ -115,15 +115,19 @@ export function deriveClosureAssessment(classification) {
   };
 }
 
-export function hydrateEvidenceTraceability(classification, reportText) {
+// Never "repair" an AI citation by clamping an impossible line number to a
+// real line. An out-of-range citation is discarded so anything depending on
+// it becomes unsupported/insufficient instead of appearing verified.
+// Extracted from hydrateEvidenceTraceability so evidence-citation validation
+// — genuinely reusable deterministic work — does not require pulling in
+// that function's hypothesis/sufficiency-check reasoning, which the
+// LangGraph ACH path (server/graph/investigation-graph.js) does not use.
+export function validateEvidenceItems(rawEvidenceItems, reportText) {
   const lines = splitReportLines(reportText);
   const maxLine = lines.length;
   const seenIds = new Set();
 
-  // Never "repair" an AI citation by clamping an impossible line number to a
-  // real line. An out-of-range citation is discarded so the dependent finding
-  // becomes unsupported/insufficient instead of appearing verified.
-  const evidenceItems = (classification.evidenceItems || [])
+  return (rawEvidenceItems || [])
     .filter((item) => {
       if (!isValidEvidenceRange(item, maxLine)) return false;
       if (seenIds.has(item.id)) return false;
@@ -144,10 +148,17 @@ export function hydrateEvidenceTraceability(classification, reportText) {
         excerpt,
       };
     });
+}
 
-  const validEvidenceIds = new Set(evidenceItems.map((item) => item.id));
-  const sourceLabelById = new Map(evidenceItems.map((item) => [item.id, item.sourceLabel]));
-  const findings = (classification.findings || []).map((finding, index) => {
+// Findings validated against evidence that survived validateEvidenceItems,
+// with evidenceStatus re-derived rather than trusted from the model. Also
+// extracted so it can be reused without the sufficiency-check machinery
+// bundled into hydrateEvidenceTraceability.
+export function groundFindings(rawFindings, validEvidenceItems) {
+  const validEvidenceIds = new Set(validEvidenceItems.map((item) => item.id));
+  const sourceLabelById = new Map(validEvidenceItems.map((item) => [item.id, item.sourceLabel]));
+
+  return (rawFindings || []).map((finding, index) => {
     const supportingEvidenceIds = (finding.supportingEvidenceIds || []).filter((id) => validEvidenceIds.has(id));
     const contradictingEvidenceIds = (finding.contradictingEvidenceIds || []).filter((id) => validEvidenceIds.has(id));
 
@@ -171,6 +182,12 @@ export function hydrateEvidenceTraceability(classification, reportText) {
       evidenceStatus,
     };
   });
+}
+
+export function hydrateEvidenceTraceability(classification, reportText) {
+  const evidenceItems = validateEvidenceItems(classification.evidenceItems, reportText);
+  const validEvidenceIds = new Set(evidenceItems.map((item) => item.id));
+  const findings = groundFindings(classification.findings, evidenceItems);
 
   const seenHypothesisIds = new Set();
   const hypotheses = (classification.hypotheses || []).map((hypothesis, index) => {
