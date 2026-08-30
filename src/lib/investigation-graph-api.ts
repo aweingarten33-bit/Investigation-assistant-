@@ -83,6 +83,12 @@ export interface KeyAssumption {
   category: "basically_solid" | "correct_with_caveats" | "unsupported_questionable" | "deprioritize";
 }
 
+// unresolved: never attempted. attempted: an action targeted it, awaiting
+// reanalysis. resolved: reanalysis no longer computes this gap. remains_open:
+// reanalysis still computes it — not re-offered as a fresh candidate.
+// unavailable: the human reported the targeted action could not be done.
+export type GapLifecycleStatus = "unresolved" | "attempted" | "resolved" | "remains_open" | "unavailable";
+
 export interface InvestigativeGap {
   id: string;
   gapType: "pivotal_evidence_needs_corroboration" | "unresolved_contradiction" | "unresolved_key_assumption" | "discriminating_evidence_missing";
@@ -90,20 +96,30 @@ export interface InvestigativeGap {
   relatedEvidenceIds?: string[];
   relatedHypothesisIds?: string[];
   relatedAssumptionIds?: string[];
+  inherentlyResolvable?: boolean;
+  lifecycleStatus: GapLifecycleStatus;
   resolvable: boolean;
+}
+
+export interface EvidenceContent {
+  evidenceId: string;
+  summary: string;
+  excerpt: string;
+  reference: string;
 }
 
 export interface FinalRecommendation {
   recommendedDetermination: "substantiated" | "unsubstantiated" | "inconclusive" | "not_applicable";
   leadingHypothesis: AchHypothesis | null;
   competingHypotheses: AchHypothesis[];
-  evidenceSupporting: string[];
-  evidenceContradicting: string[];
-  mostDiagnosticEvidenceIds: string[];
+  evidenceSupporting: EvidenceContent[];
+  evidenceContradicting: EvidenceContent[];
+  mostDiagnosticEvidence: EvidenceContent[];
   achResult: AchResult;
   sensitivity: SensitivityResult;
   keyAssumptions: KeyAssumption[];
   remainingLimitations: InvestigativeGap[];
+  citedEvidenceIds: string[];
   whatCouldChangeThis: string;
   aiRationale: string;
   humanFinalDetermination: "pending";

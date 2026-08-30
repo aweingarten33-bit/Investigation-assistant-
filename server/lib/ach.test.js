@@ -7,6 +7,7 @@
 // CC/C/N/I/II/NA) so a faithful port is provable, not just plausible.
 import { describe, expect, it } from "vitest";
 import {
+  AchMatrixValidationError,
   diagnosticityFlag,
   inconsistencyTotals,
   markSpread,
@@ -14,6 +15,7 @@ import {
   rankHypotheses,
   scoreAch,
   sensitivityAnalysis,
+  validateAchMatrix,
 } from "./ach.js";
 
 const HYPOTHESES = [
@@ -117,6 +119,69 @@ describe("ach.js — ported scoring algorithm (parity with upstream ach.py selft
       const result = sensitivityAnalysis(hyps, evidence);
       expect(result.currentLeaderId).toBe("H1");
       expect(result.pivotalEvidenceIds).toEqual([]);
+    });
+  });
+
+  describe("validateAchMatrix — fail-closed, never defaults a missing/bad cell", () => {
+    const hyps = [{ id: "H1", label: "A" }, { id: "H2", label: "B" }];
+    const evidenceItems = [{ id: "E1" }, { id: "E2" }];
+
+    it("accepts a complete, valid matrix unchanged", () => {
+      const matrix = [
+        { evidenceId: "E1", marks: { H1: "consistent", H2: "not_applicable" } },
+        { evidenceId: "E2", marks: { H1: "inconsistent", H2: "neutral" } },
+      ];
+      expect(validateAchMatrix(matrix, evidenceItems, hyps)).toBe(matrix);
+    });
+
+    it("rejects a row missing a mark for an active hypothesis", () => {
+      const matrix = [
+        { evidenceId: "E1", marks: { H1: "consistent" } }, // no H2 mark
+        { evidenceId: "E2", marks: { H1: "inconsistent", H2: "neutral" } },
+      ];
+      expect(() => validateAchMatrix(matrix, evidenceItems, hyps)).toThrow(AchMatrixValidationError);
+      expect(() => validateAchMatrix(matrix, evidenceItems, hyps)).toThrow(/missing a mark/);
+    });
+
+    it("rejects an invalid mark value rather than defaulting it", () => {
+      const matrix = [
+        { evidenceId: "E1", marks: { H1: "consistent", H2: "extremely_consistent" } },
+        { evidenceId: "E2", marks: { H1: "inconsistent", H2: "neutral" } },
+      ];
+      expect(() => validateAchMatrix(matrix, evidenceItems, hyps)).toThrow(/invalid mark/);
+    });
+
+    it("rejects a duplicate row for the same evidence id", () => {
+      const matrix = [
+        { evidenceId: "E1", marks: { H1: "consistent", H2: "neutral" } },
+        { evidenceId: "E1", marks: { H1: "inconsistent", H2: "neutral" } },
+        { evidenceId: "E2", marks: { H1: "inconsistent", H2: "neutral" } },
+      ];
+      expect(() => validateAchMatrix(matrix, evidenceItems, hyps)).toThrow(/more than one row/);
+    });
+
+    it("rejects a mark for an unknown hypothesis id", () => {
+      const matrix = [
+        { evidenceId: "E1", marks: { H1: "consistent", H2: "neutral", H3: "consistent" } },
+        { evidenceId: "E2", marks: { H1: "inconsistent", H2: "neutral" } },
+      ];
+      expect(() => validateAchMatrix(matrix, evidenceItems, hyps)).toThrow(/unknown hypothesis/);
+    });
+
+    it("rejects a row that references evidence not in the validated evidence set", () => {
+      const matrix = [
+        { evidenceId: "E1", marks: { H1: "consistent", H2: "neutral" } },
+        { evidenceId: "E99", marks: { H1: "inconsistent", H2: "neutral" } },
+      ];
+      expect(() => validateAchMatrix(matrix, evidenceItems, hyps)).toThrow(/not a validated evidence item/);
+    });
+
+    it("rejects a matrix missing a row entirely for a validated evidence item", () => {
+      const matrix = [
+        { evidenceId: "E1", marks: { H1: "consistent", H2: "neutral" } },
+        // no row for E2
+      ];
+      expect(() => validateAchMatrix(matrix, evidenceItems, hyps)).toThrow(/missing a row/);
     });
   });
 });

@@ -2,6 +2,7 @@ import express from "express";
 import { randomBytes, timingSafeEqual as cryptoTimingSafeEqual } from "node:crypto";
 import { z, ZodError } from "zod";
 import { callStructured, callTextWithSearch } from "../lib/ai.js";
+import { EVIDENCE_TYPES } from "../lib/evidence-vocabulary.js";
 import { createRateLimiter, clientIp } from "../lib/rate-limit.js";
 import {
   buildInputHash,
@@ -35,7 +36,7 @@ if (!configuredSigningSecret) {
 const VALID_DECISIONS = ["substantiated", "unsubstantiated", "needs_more_info"];
 const VALID_RISK = ["low", "moderate", "high", "critical"];
 const VALID_TIERS = ["re-education", "written_warning", "consider_termination", "recommend_termination", "policy_review"];
-export const EVIDENCE_TYPES = ["document", "interview", "audit", "system_record", "policy", "other"];
+export { EVIDENCE_TYPES };
 export const EVIDENCE_STANCES = ["supports", "contradicts", "context"];
 export const EVIDENCE_STATUSES = ["corroborated", "supported", "single_source", "contradicted", "insufficient"];
 const DISCIPLINE_IMPACTS = ["mitigating", "neutral", "aggravating", "unknown"];

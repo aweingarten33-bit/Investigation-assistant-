@@ -16,9 +16,14 @@ used under the MIT License.
   code, not present upstream, built on top of the ported scoring functions.
 - `server/lib/key-assumptions-check.js` adapts the grounding x sensitivity
   category grid described in `skills/key-assumptions-check/SKILL.md`.
-- `server/lib/admiralty.js` adapts the source-reliability (A-F) and
-  information-credibility (1-6) label tables from
-  `skills/rate-source-admiralty/scripts/admiralty.py`.
+
+(A prior version of this branch also adapted `rate-source-admiralty`'s
+source-reliability/information-credibility label tables into
+`server/lib/admiralty.js`. It was removed: the fields it added to the
+evidence schema never fed any actual reasoning decision — no scoring, gap
+identification, or recommendation logic read them. Carrying unused
+methodology code was worse than not having it; it can come back if a real
+decision starts depending on it.)
 
 Method attribution (see each skill's `SKILL.md` for full citations):
 
@@ -28,8 +33,6 @@ Method attribution (see each skill's `SKILL.md` for full citations):
   Analytic Techniques for Improving Intelligence Analysis*, 2009; R. J.
   Heuer Jr. & R. H. Pherson, *Structured Analytic Techniques for
   Intelligence Analysis*, 3rd ed., 2019, ch. 7.
-- Admiralty Code: NATO STANAG 2511 / AJP-2.1, 2003; U.S. Army FM 2-22.3
-  (2006), Appendix B.
 
 ## License
 

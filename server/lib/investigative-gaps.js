@@ -17,24 +17,35 @@ const GAP_TYPE_PRIORITY = {
   discriminating_evidence_missing: 3,
 };
 
-function wasReportedUnavailable(actionHistory, gapId) {
-  return (actionHistory || []).some((a) => a.status === "unavailable" && a.targetGapId === gapId);
+// Content-based, not position-based: reordering or lightly rephrasing the
+// model's unresolvedQuestions list between rounds must not manufacture a
+// "new" gap id for something already tracked in gapHistory.
+export function slugify(text) {
+  const slug = String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+  return slug || "question";
 }
 
-export function identifyInvestigativeGaps({ achResult, sensitivity, achMatrix, keyAssumptions, unresolvedQuestions, actionHistory }) {
+// Structural gaps computed fresh from the current state — every call is a
+// clean re-derivation, with no memory of prior rounds. Whether a gap is
+// actually still worth acting on (never tried, tried and resolved, tried
+// and stuck, or reported unobtainable) is applyGapLifecycle's job below,
+// not this function's. inherentlyResolvable marks a gap that KAC itself
+// already decided is not further actionable (disposition bound/flag) —
+// distinct from the attempt-based lifecycle, since that call was made once
+// by the analysis, not by a failed action.
+export function identifyInvestigativeGaps({ achResult, sensitivity, achMatrix, keyAssumptions, unresolvedQuestions }) {
   const gaps = [];
   const leadingId = achResult?.ranking?.[0]?.hypothesisId || null;
 
   for (const evidenceId of sensitivity?.pivotalEvidenceIds || []) {
-    const id = `pivot:${evidenceId}`;
     const flip = (sensitivity.flips || []).find((f) => f.evidenceId === evidenceId);
     gaps.push({
-      id,
+      id: `pivot:${evidenceId}`,
       gapType: "pivotal_evidence_needs_corroboration",
       description: `Evidence ${evidenceId} is pivotal — the leading explanation changes if this evidence is retracted or disproven${flip ? ` (ranking would flip to ${flip.newLeaderId})` : ""}.`,
       relatedEvidenceIds: [evidenceId],
       relatedHypothesisIds: leadingId ? [leadingId] : [],
-      resolvable: !wasReportedUnavailable(actionHistory, id),
+      inherentlyResolvable: true,
     });
   }
 
@@ -42,14 +53,13 @@ export function identifyInvestigativeGaps({ achResult, sensitivity, achMatrix, k
     for (const row of achMatrix || []) {
       const mark = row.marks?.[leadingId];
       if (mark === "inconsistent" || mark === "strongly_inconsistent") {
-        const id = `contradiction:${row.evidenceId}:${leadingId}`;
         gaps.push({
-          id,
+          id: `contradiction:${row.evidenceId}:${leadingId}`,
           gapType: "unresolved_contradiction",
           description: `Evidence ${row.evidenceId} is inconsistent with the leading explanation and is not yet reconciled.`,
           relatedEvidenceIds: [row.evidenceId],
           relatedHypothesisIds: [leadingId],
-          resolvable: !wasReportedUnavailable(actionHistory, id),
+          inherentlyResolvable: true,
         });
       }
     }
@@ -57,25 +67,27 @@ export function identifyInvestigativeGaps({ achResult, sensitivity, achMatrix, k
 
   for (const assumption of keyAssumptions || []) {
     if (assumption.category !== "unsupported_questionable") continue;
-    const id = `assumption:${assumption.id}`;
     gaps.push({
-      id,
+      id: `assumption:${assumption.id}`,
       gapType: "unresolved_key_assumption",
       description: assumption.statement,
       relatedAssumptionIds: [assumption.id],
       relatedHypothesisIds: leadingId ? [leadingId] : [],
-      resolvable: isResolvableAssumptionGap(assumption) && !wasReportedUnavailable(actionHistory, id),
+      // KAC itself judged this: disposition re-source/test is actionable;
+      // bound/flag means the check already concluded no further step is
+      // realistically obtainable — a documented limitation, not a gap to
+      // send a human after.
+      inherentlyResolvable: isResolvableAssumptionGap(assumption),
     });
   }
 
-  (unresolvedQuestions || []).forEach((question, index) => {
-    const id = `question:${index}:${question.slice(0, 40)}`;
+  (unresolvedQuestions || []).forEach((question) => {
     gaps.push({
-      id,
+      id: `question:${slugify(question)}`,
       gapType: "discriminating_evidence_missing",
       description: question,
       relatedHypothesisIds: leadingId ? [leadingId] : [],
-      resolvable: !wasReportedUnavailable(actionHistory, id),
+      inherentlyResolvable: true,
     });
   });
 
@@ -88,6 +100,54 @@ export function identifyInvestigativeGaps({ achResult, sensitivity, achMatrix, k
 // question.
 export function rankGaps(gaps) {
   return [...(gaps || [])].sort((a, b) => (GAP_TYPE_PRIORITY[a.gapType] ?? 9) - (GAP_TYPE_PRIORITY[b.gapType] ?? 9));
+}
+
+// gapHistory is a { [gapId]: { status, at } } map persisted in graph state
+// across rounds — the smallest lifecycle needed to stop a gap from being
+// recommended forever: unresolved (default, no entry yet) -> attempted (an
+// action targeted it, set by recommendNextBestAction) -> resolved (the
+// next reanalysis no longer computes this gap at all) | remains_open (the
+// next reanalysis still computes it — a completed action does NOT get to
+// claim resolution on its own; only reanalysis does) | unavailable (the
+// human reported the targeted action could not be completed, set directly
+// by ingestHumanResult without waiting on reanalysis).
+//
+// Call this once per computeReadiness pass, after a fresh
+// identifyInvestigativeGaps() — it both resolves any pending "attempted"
+// entries against the newly computed structural gaps and produces the
+// final resolvable flag each gap carries this round.
+export function applyGapLifecycle(rawGaps, gapHistory) {
+  const nextHistory = { ...(gapHistory || {}) };
+  const rawGapIds = new Set(rawGaps.map((g) => g.id));
+
+  for (const [gapId, entry] of Object.entries(nextHistory)) {
+    if (entry.status === "attempted") {
+      nextHistory[gapId] = {
+        status: rawGapIds.has(gapId) ? "remains_open" : "resolved",
+        at: new Date().toISOString(),
+      };
+    }
+  }
+
+  const gaps = rawGaps.map((gap) => {
+    const lifecycleStatus = nextHistory[gap.id]?.status || "unresolved";
+    const resolvable = gap.inherentlyResolvable !== false
+      && lifecycleStatus !== "remains_open"
+      && lifecycleStatus !== "unavailable";
+    return { ...gap, lifecycleStatus, resolvable };
+  });
+
+  return { gaps, gapHistory: nextHistory };
+}
+
+export function markGapAttempted(gapHistory, gapId) {
+  if (!gapId) return gapHistory || {};
+  return { ...(gapHistory || {}), [gapId]: { status: "attempted", at: new Date().toISOString() } };
+}
+
+export function markGapUnavailable(gapHistory, gapId) {
+  if (!gapId) return gapHistory || {};
+  return { ...(gapHistory || {}), [gapId]: { status: "unavailable", at: new Date().toISOString() } };
 }
 
 // INCOMPLETE: a material uncertainty remains AND a reasonable investigative

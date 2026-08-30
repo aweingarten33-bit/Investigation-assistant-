@@ -1,9 +1,16 @@
 import { Annotation, StateGraph, START, END, interrupt } from "@langchain/langgraph";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { validateEvidenceItems, groundFindings, numberReportLines } from "../lib/investigation-utils.js";
-import { evidenceForAgainst, scoreAch, sensitivityAnalysis } from "../lib/ach.js";
+import { evidenceForAgainst, scoreAch, sensitivityAnalysis, validateAchMatrix } from "../lib/ach.js";
 import { categorizeAssumption } from "../lib/key-assumptions-check.js";
-import { computeInvestigationStatus, identifyInvestigativeGaps, rankGaps } from "../lib/investigative-gaps.js";
+import {
+  applyGapLifecycle,
+  computeInvestigationStatus,
+  identifyInvestigativeGaps,
+  markGapAttempted,
+  markGapUnavailable,
+  rankGaps,
+} from "../lib/investigative-gaps.js";
 import {
   EvidenceExtractionZ,
   KeyAssumptionsCheckZ,
@@ -34,6 +41,10 @@ export const InvestigationState = Annotation.Root({
   keyAssumptions: Annotation({ default: () => [] }), // KeyAssumptionZ[] + computed `category`
   unresolvedQuestions: Annotation({ default: () => [] }),
   investigativeGaps: Annotation({ default: () => [] }),
+  // { [gapId]: { status: "attempted"|"resolved"|"remains_open"|"unavailable", at } }
+  // — the smallest lifecycle needed so a gap already tried isn't just
+  // recommended again forever. See lib/investigative-gaps.js.
+  gapHistory: Annotation({ default: () => ({}) }),
   // "incomplete" | "ready_with_limitations" | "ready_for_review" — computed
   // by computeInvestigationStatus from investigativeGaps, never announced
   // by the model.
@@ -64,7 +75,6 @@ const EVIDENCE_EXTRACTION_PROMPT = `You are the evidence-and-hypothesis stage of
 ABSOLUTE EVIDENCE RULES:
 - The case notes arrive with immutable line labels like [L0001]. Every case-specific factual claim must trace to those lines.
 - Create evidenceItems only for actual information in the notes. Cite lineStart/lineEnd; never invent a source, interview, audit, policy, date, witness, or record.
-- Only grade sourceReliability/informationCredibility when you actually have a basis (a track record for the source, or corroboration for the item); otherwise leave them null. Never use these to judge a person's honesty — they grade the RECORD, not the witness.
 - A finding must reference evidence item IDs. Record contradictory evidence instead of hiding it.
 
 HYPOTHESES:
@@ -73,6 +83,7 @@ HYPOTHESES:
 
 ACH MATRIX (build this — it is the actual method, not a summary):
 - For EVERY evidence item, grade its consistency against EVERY hypothesis, graded in isolation from the other cells: "if this hypothesis were true, would this evidence surprise me?"
+- You MUST provide exactly one mark for every evidence item x every hypothesis pair — no missing cells. A cell that genuinely does not bear on a hypothesis still needs an explicit mark: not_applicable.
 - Marks: strongly_consistent, consistent, neutral, inconsistent, strongly_inconsistent, not_applicable.
 - Grade evidence primarily by what it is INCONSISTENT with, not by counting confirmations — the point of ACH is to find what each hypothesis contradicts, not what it agrees with.
 
@@ -96,11 +107,13 @@ If the action is an interview, populate suggestedQuestions with a short, focused
 
 Never recommend an action that matches one already attempted below — pick a different candidate, or return actionType NO_FURTHER_REASONABLE_ACTION if nothing on the shortlist is realistically obtainable.`;
 
-const FINAL_RECOMMENDATION_PROMPT = `You are drafting the final AI recommendation for human review. No material, reasonably-resolvable investigative gap remains — the structured analysis (ACH ranking, sensitivity, key assumptions) is provided below.
+const FINAL_RECOMMENDATION_PROMPT = `You are drafting the final AI recommendation for human review. No material, reasonably-resolvable investigative gap remains — the structured analysis (ACH ranking, sensitivity, key assumptions) and the actual supporting/contradicting evidence content are provided below.
 
 Only use "substantiated", "unsubstantiated", or "inconclusive" for recommendedDetermination when the case objective or supplied context actually calls for that kind of determination. Never invent an organization's legal or disciplinary standard — if none was supplied and the framing does not call for one, use "not_applicable" and frame the rationale around what the evidence shows instead.
 
-This is a RECOMMENDATION, not a decision — a human makes the final determination. Write the rationale so it stands on the ACH ranking and key assumptions actually given to you, not on anything outside them.`;
+List the evidence IDs you actually rely on in citedEvidenceIds. Only cite evidence ids that were actually given to you below — never invent one.
+
+This is a RECOMMENDATION, not a decision — a human makes the final determination. Write the rationale so it stands on the evidence and structured analysis actually given to you, not on anything outside them.`;
 
 function contextBlock(state) {
   return [
@@ -112,7 +125,7 @@ function contextBlock(state) {
 
 function buildEvidenceExtractionUserMessage(state) {
   const ctx = contextBlock(state);
-  return `${ctx ? `${ctx}\n\n` : ""}Analyze the line-numbered investigation notes below. Extract evidence, build the competing hypotheses, and complete the full ACH matrix (every evidence item x every hypothesis).\n\n--- CASE NOTES ---\n${numberReportLines(state.caseNotes)}\n--- END CASE NOTES ---`;
+  return `${ctx ? `${ctx}\n\n` : ""}Analyze the line-numbered investigation notes below. Extract evidence, build the competing hypotheses, and complete the full ACH matrix (every evidence item x every hypothesis — no missing cells).\n\n--- CASE NOTES ---\n${numberReportLines(state.caseNotes)}\n--- END CASE NOTES ---`;
 }
 
 function buildKeyAssumptionsUserMessage(state) {
@@ -136,9 +149,24 @@ function buildRecommendActionUserMessage(state, candidates) {
   return `${ctx ? `${ctx}\n\n` : ""}Ranked candidate investigative gaps (most diagnostic first):\n${JSON.stringify(candidates, null, 2)}\n\nActions already attempted (do not repeat these):\n${describeAttemptedActions(state.actionHistory)}`;
 }
 
+// Compact, validated evidence content for the final-recommendation call —
+// never raw/unvalidated source text, only what survived
+// validateEvidenceItems (summary/excerpt/reference are all derived there).
+function describeEvidenceContent(ids, evidenceItems) {
+  return (ids || [])
+    .map((id) => evidenceItems.find((e) => e.id === id))
+    .filter(Boolean)
+    .map((e) => ({ evidenceId: e.id, summary: e.summary, excerpt: e.excerpt, reference: e.reference }));
+}
+
 function buildFinalRecommendationUserMessage(state) {
   const ctx = contextBlock(state);
-  return `${ctx ? `${ctx}\n\n` : ""}ACH ranking (fewest weighted inconsistencies first):\n${JSON.stringify(state.achResult.ranking, null, 2)}\n\nSensitivity: ${JSON.stringify(state.sensitivity, null, 2)}\n\nKey assumptions behind the leading explanation:\n${JSON.stringify(state.keyAssumptions, null, 2)}\n\nRemaining limitations (not reasonably resolvable further):\n${JSON.stringify(state.investigativeGaps, null, 2)}`;
+  const leader = state.achResult.ranking[0];
+  const leadingHypothesis = state.hypotheses.find((h) => h.id === leader.hypothesisId) || null;
+  const competingHypotheses = state.achResult.ranking.slice(1).map((r) => state.hypotheses.find((h) => h.id === r.hypothesisId)).filter(Boolean);
+  const { supportingEvidenceIds, contradictingEvidenceIds } = evidenceForAgainst(state.achMatrix, leader.hypothesisId);
+
+  return `${ctx ? `${ctx}\n\n` : ""}Leading hypothesis:\n${JSON.stringify(leadingHypothesis, null, 2)}\n\nCompeting hypotheses:\n${JSON.stringify(competingHypotheses, null, 2)}\n\nEvidence supporting the leading hypothesis:\n${JSON.stringify(describeEvidenceContent(supportingEvidenceIds, state.evidenceItems), null, 2)}\n\nEvidence contradicting the leading hypothesis:\n${JSON.stringify(describeEvidenceContent(contradictingEvidenceIds, state.evidenceItems), null, 2)}\n\nMost diagnostic evidence:\n${JSON.stringify(describeEvidenceContent(state.achResult.mostDiagnosticEvidenceIds, state.evidenceItems), null, 2)}\n\nACH ranking (fewest weighted inconsistencies first):\n${JSON.stringify(state.achResult.ranking, null, 2)}\n\nSensitivity (pivotal evidence — what flips the ranking if retracted):\n${JSON.stringify(state.sensitivity, null, 2)}\n\nKey assumptions behind the leading explanation:\n${JSON.stringify(state.keyAssumptions, null, 2)}\n\nRemaining limitations (not reasonably resolvable further):\n${JSON.stringify(state.investigativeGaps.filter((g) => !g.resolvable), null, 2)}`;
 }
 
 // Deterministic anti-repetition check — never trusted to the model's memory
@@ -203,21 +231,20 @@ export function buildInvestigationGraph({ model } = {}) {
 
     const evidenceItems = validateEvidenceItems(raw.evidenceItems, state.caseNotes);
     const findings = groundFindings(raw.findings, evidenceItems);
-    const validEvidenceIds = new Set(evidenceItems.map((e) => e.id));
-    const validHypothesisIds = new Set((raw.hypotheses || []).map((h) => h.id));
-
-    // Invalidated evidence must change the analysis: an ACH matrix row that
-    // cites evidence which failed citation validation is dropped entirely,
-    // not kept with a stale mark — the same "strip, don't repair" posture
-    // as evidence citations themselves.
-    const achMatrix = (raw.achMatrix || [])
-      .filter((row) => validEvidenceIds.has(row.evidenceId))
-      .map((row) => ({
-        evidenceId: row.evidenceId,
-        marks: Object.fromEntries(Object.entries(row.marks || {}).filter(([hid]) => validHypothesisIds.has(hid))),
-      }));
-
     const hypotheses = raw.hypotheses || [];
+
+    // Fail-closed: a matrix with a missing cell, an invalid mark, a
+    // duplicate row, an unknown hypothesis id, or a row citing evidence
+    // that failed citation validation is malformed output — it goes
+    // through the exact same error path as a schema violation above, not
+    // a silent repair.
+    let achMatrix;
+    try {
+      achMatrix = validateAchMatrix(raw.achMatrix, evidenceItems, hypotheses);
+    } catch (error) {
+      return pushError(state, "analyzeEvidence", error);
+    }
+
     const achResult = hypotheses.length > 0 ? scoreAch(hypotheses, achMatrix) : { ranking: [], diagnosticity: [], mostDiagnosticEvidenceIds: [], mostDiagnosticSpread: 0 };
     const sensitivity = hypotheses.length > 1 ? sensitivityAnalysis(hypotheses, achMatrix) : { currentLeaderId: hypotheses[0]?.id || null, pivotalEvidenceIds: [], flips: [] };
 
@@ -264,19 +291,23 @@ export function buildInvestigationGraph({ model } = {}) {
   // Pure/deterministic — no model call. Replaces the old 8-sufficiency-
   // check closure brain: readiness is computed from investigativeGaps
   // (themselves derived from ACH sensitivity + unresolved contradictions +
-  // key uncertainties), never announced by the model.
+  // key uncertainties), never announced by the model. Also where the gap
+  // lifecycle actually advances: any gap marked "attempted" last round is
+  // resolved against this round's freshly computed structural gaps.
   function computeReadiness(state) {
-    const investigativeGaps = identifyInvestigativeGaps(state);
+    const rawGaps = identifyInvestigativeGaps(state);
+    const { gaps: investigativeGaps, gapHistory } = applyGapLifecycle(rawGaps, state.gapHistory);
     const investigationStatus = computeInvestigationStatus(investigativeGaps);
     return {
       investigativeGaps,
+      gapHistory,
       investigationStatus,
       graphStatus: investigationStatus === "incomplete" ? "awaiting_next_action" : "awaiting_human_review",
     };
   }
 
   function afterReadinessRouter(state) {
-    return state.investigationStatus === "incomplete" ? "recommendNextBestAction" : "readyForHumanReview";
+    return state.investigationStatus === "incomplete" ? "recommendNextBestAction" : "buildFinalRecommendation";
   }
 
   async function recommendNextBestAction(state) {
@@ -308,6 +339,7 @@ export function buildInvestigationGraph({ model } = {}) {
         ...(state.actionHistory || []),
         { actionType: action.actionType, evidenceOrPersonNeeded: action.evidenceOrPersonNeeded, targetGapId: action.targetGapId, status: "recommended" },
       ],
+      gapHistory: markGapAttempted(state.gapHistory, action.targetGapId),
       graphStatus: "awaiting_human_action",
     };
   }
@@ -366,6 +398,14 @@ export function buildInvestigationGraph({ model } = {}) {
         : a,
     );
 
+    // A report that the action could not be completed is known immediately
+    // — it does not need to wait on reanalysis the way "did this actually
+    // resolve the gap" does. "completed" leaves the gap "attempted";
+    // computeReadiness resolves that against the next reanalysis.
+    const gapHistory = resultType === "unavailable" && pendingAction?.targetGapId
+      ? markGapUnavailable(state.gapHistory, pendingAction.targetGapId)
+      : state.gapHistory;
+
     return {
       caseNotes: `${state.caseNotes}\n\n--- ${label} ---\n${text}`,
       humanInputs: [
@@ -374,6 +414,7 @@ export function buildInvestigationGraph({ model } = {}) {
       ],
       actionHistory,
       completedActions: actionHistory.filter((a) => a.status === "completed" || a.status === "unavailable"),
+      gapHistory,
       pendingHumanResult: null,
       graphStatus: "ingested",
     };
@@ -383,12 +424,15 @@ export function buildInvestigationGraph({ model } = {}) {
     return state.graphStatus === "error" ? END : "reanalyze";
   }
 
-  // Pauses with the full final-recommendation packet. Case closure and
-  // discipline stay out of scope — the graph does not autonomously close
-  // the case; humanFinalDetermination is always "pending" until a human
-  // acts outside this graph. If this ever resumes, the response is just
-  // recorded as an acknowledgment; there is nowhere further to route.
-  async function readyForHumanReview(state) {
+  // Model call happens exactly once, here, and is stored in state —
+  // finalHumanReviewInterrupt (below) is a separate node reached by a
+  // plain edge, never replayed by interrupt()'s re-entry-from-the-top
+  // semantics. Splitting this from the interrupt itself is the fix for the
+  // replay bug: the OLD single readyForHumanReview node called the model
+  // before interrupt(), which would re-run (and could produce a different
+  // or duplicate recommendation) every time that node re-entered on
+  // resume.
+  async function buildFinalRecommendation(state) {
     const leader = state.achResult.ranking[0] || null;
     const { supportingEvidenceIds, contradictingEvidenceIds } = leader ? evidenceForAgainst(state.achMatrix, leader.hypothesisId) : { supportingEvidenceIds: [], contradictingEvidenceIds: [] };
 
@@ -399,35 +443,56 @@ export function buildInvestigationGraph({ model } = {}) {
         { role: "user", content: buildFinalRecommendationUserMessage(state) },
       ]);
     } catch (error) {
-      return pushError(state, "readyForHumanReview", error);
+      return pushError(state, "buildFinalRecommendation", error);
     }
+
+    // Deterministically strip any cited evidence id the model invented or
+    // misremembered — never trusted as-is, same "strip, don't repair"
+    // posture as evidence citations themselves.
+    const validEvidenceIds = new Set(state.evidenceItems.map((e) => e.id));
+    const citedEvidenceIds = (draft.citedEvidenceIds || []).filter((id) => validEvidenceIds.has(id));
 
     const finalRecommendation = {
       recommendedDetermination: draft.recommendedDetermination,
       leadingHypothesis: leader ? state.hypotheses.find((h) => h.id === leader.hypothesisId) : null,
       competingHypotheses: state.achResult.ranking.slice(1).map((r) => state.hypotheses.find((h) => h.id === r.hypothesisId)).filter(Boolean),
-      evidenceSupporting: supportingEvidenceIds,
-      evidenceContradicting: contradictingEvidenceIds,
-      mostDiagnosticEvidenceIds: state.achResult.mostDiagnosticEvidenceIds,
+      evidenceSupporting: describeEvidenceContent(supportingEvidenceIds, state.evidenceItems),
+      evidenceContradicting: describeEvidenceContent(contradictingEvidenceIds, state.evidenceItems),
+      mostDiagnosticEvidence: describeEvidenceContent(state.achResult.mostDiagnosticEvidenceIds, state.evidenceItems),
       achResult: state.achResult,
       sensitivity: state.sensitivity,
       keyAssumptions: state.keyAssumptions,
       remainingLimitations: state.investigativeGaps,
+      citedEvidenceIds,
       whatCouldChangeThis: draft.whatCouldChangeThis,
       aiRationale: draft.rationale,
       humanFinalDetermination: "pending",
     };
 
+    return { finalRecommendation, graphStatus: "recommendation_ready" };
+  }
+
+  function afterBuildFinalRecommendationRouter(state) {
+    return state.graphStatus === "error" ? END : "finalHumanReviewInterrupt";
+  }
+
+  // Deliberately nothing before interrupt() — same rule as
+  // humanActionInterrupt above. finalRecommendation was already computed
+  // and stored by buildFinalRecommendation; this node only ever reads it
+  // back out of state and pauses. Case closure and discipline stay out of
+  // scope — the graph does not autonomously close the case;
+  // humanFinalDetermination is always "pending" until a human acts outside
+  // this graph. If this ever resumes, the response is just recorded as an
+  // acknowledgment; there is nowhere further to route.
+  function finalHumanReviewInterrupt(state) {
     const ack = interrupt({
       kind: "ready_for_human_review",
-      finalRecommendation,
+      finalRecommendation: state.finalRecommendation,
       investigationStatus: state.investigationStatus,
       message: "Investigation has reached a review point. This is an AI recommendation, not a decision — the graph does not close the case automatically.",
     });
-
-    const base = { finalRecommendation };
-    if (ack === undefined || ack === null) return base;
-    return { ...base, humanInputs: [...(state.humanInputs || []), { resultType: "review_acknowledgment", text: String(ack), respondingToAction: null, at: new Date().toISOString() }] };
+    if (ack === undefined || ack === null) return {};
+    return { humanInputs: [...(state.humanInputs || []), { resultType: "review_acknowledgment", text: String(ack), respondingToAction: null, at: new Date().toISOString() }] };
   }
 
   const graph = new StateGraph(InvestigationState)
@@ -439,17 +504,19 @@ export function buildInvestigationGraph({ model } = {}) {
     .addNode("humanActionInterrupt", humanActionInterrupt)
     .addNode("ingestHumanResult", ingestHumanResult)
     .addNode("reanalyze", runEvidenceAnalysis)
-    .addNode("readyForHumanReview", readyForHumanReview)
+    .addNode("buildFinalRecommendation", buildFinalRecommendation)
+    .addNode("finalHumanReviewInterrupt", finalHumanReviewInterrupt)
     .addEdge(START, "openCase")
     .addEdge("openCase", "analyzeEvidence")
     .addConditionalEdges("analyzeEvidence", afterAnalysisRouter, ["assessKeyAssumptions", END])
     .addConditionalEdges("assessKeyAssumptions", afterAssumptionsRouter, ["computeReadiness", END])
-    .addConditionalEdges("computeReadiness", afterReadinessRouter, ["recommendNextBestAction", "readyForHumanReview"])
+    .addConditionalEdges("computeReadiness", afterReadinessRouter, ["recommendNextBestAction", "buildFinalRecommendation"])
     .addConditionalEdges("recommendNextBestAction", afterRecommendRouter, ["humanActionInterrupt", END])
     .addEdge("humanActionInterrupt", "ingestHumanResult")
     .addConditionalEdges("ingestHumanResult", afterIngestRouter, ["reanalyze", END])
     .addConditionalEdges("reanalyze", afterAnalysisRouter, ["assessKeyAssumptions", END])
-    .addEdge("readyForHumanReview", END);
+    .addConditionalEdges("buildFinalRecommendation", afterBuildFinalRecommendationRouter, ["finalHumanReviewInterrupt", END])
+    .addEdge("finalHumanReviewInterrupt", END);
 
   return graph;
 }

@@ -32,6 +32,63 @@ export const ACH_MARKS = [...Object.keys(MARK_VALUE), "not_applicable"];
 // strongly_inconsistent penalizes double.
 const INCONSISTENCY_PENALTY = { inconsistent: 1.0, strongly_inconsistent: 2.0 };
 
+export class AchMatrixValidationError extends Error {}
+
+// Fail-closed matrix validation. Every valid evidence item must have
+// exactly one row; every row must carry an explicit, valid mark for every
+// active hypothesis and no others; no duplicate rows; no row for evidence
+// that failed citation validation. A model is never trusted to leave a
+// cell blank and have it "mean" not_applicable — not_applicable is only
+// ever what it looks like when the model explicitly wrote it. Anything
+// that fails here is a malformed structured-output response and must go
+// through the same error path as a schema violation (the caller's
+// try/catch), not be silently repaired or defaulted.
+export function validateAchMatrix(matrix, evidenceItems, hypotheses) {
+  const validEvidenceIds = new Set(evidenceItems.map((e) => e.id));
+  const hypothesisIds = hypotheses.map((h) => h.id);
+  const validHypothesisIds = new Set(hypothesisIds);
+
+  if (!Array.isArray(matrix)) {
+    throw new AchMatrixValidationError("ACH matrix must be an array");
+  }
+
+  const seenEvidenceIds = new Set();
+  for (const row of matrix) {
+    if (!row || typeof row.evidenceId !== "string") {
+      throw new AchMatrixValidationError("ACH matrix row is missing evidenceId");
+    }
+    if (!validEvidenceIds.has(row.evidenceId)) {
+      throw new AchMatrixValidationError(`ACH matrix row references evidence id ${row.evidenceId}, which is not a validated evidence item`);
+    }
+    if (seenEvidenceIds.has(row.evidenceId)) {
+      throw new AchMatrixValidationError(`ACH matrix has more than one row for evidence id ${row.evidenceId}`);
+    }
+    seenEvidenceIds.add(row.evidenceId);
+
+    const marks = row.marks && typeof row.marks === "object" ? row.marks : {};
+    const unknownHypothesisIds = Object.keys(marks).filter((hid) => !validHypothesisIds.has(hid));
+    if (unknownHypothesisIds.length > 0) {
+      throw new AchMatrixValidationError(`ACH matrix row for evidence ${row.evidenceId} has mark(s) for unknown hypothesis id(s): ${unknownHypothesisIds.join(", ")}`);
+    }
+    const missingHypothesisIds = hypothesisIds.filter((hid) => !(hid in marks));
+    if (missingHypothesisIds.length > 0) {
+      throw new AchMatrixValidationError(`ACH matrix row for evidence ${row.evidenceId} is missing a mark for hypothesis id(s): ${missingHypothesisIds.join(", ")}`);
+    }
+    for (const hid of hypothesisIds) {
+      if (!ACH_MARKS.includes(marks[hid])) {
+        throw new AchMatrixValidationError(`ACH matrix row for evidence ${row.evidenceId} has an invalid mark ${JSON.stringify(marks[hid])} for hypothesis ${hid}`);
+      }
+    }
+  }
+
+  const missingEvidenceIds = [...validEvidenceIds].filter((id) => !seenEvidenceIds.has(id));
+  if (missingEvidenceIds.length > 0) {
+    throw new AchMatrixValidationError(`ACH matrix is missing a row for validated evidence id(s): ${missingEvidenceIds.join(", ")}`);
+  }
+
+  return matrix;
+}
+
 function markOf(row, hypothesisId) {
   const mark = row.marks?.[hypothesisId];
   return ACH_MARKS.includes(mark) ? mark : "not_applicable";

@@ -1,12 +1,9 @@
 import { z } from "zod";
-import { EVIDENCE_TYPES } from "../routes/analyze-report.js";
-import { ACH_MARKS } from "../lib/ach.js";
+import { EVIDENCE_TYPES } from "../lib/evidence-vocabulary.js";
 import { ASSUMPTION_GROUNDING, ASSUMPTION_SENSITIVITY } from "../lib/key-assumptions-check.js";
-import { SOURCE_RELIABILITY_GRADES, INFORMATION_CREDIBILITY_GRADES } from "../lib/admiralty.js";
 
-// evidenceType is reused from the legacy schema deliberately — it is a
-// vocabulary/data enum (document/interview/audit/...), not part of the old
-// sufficiency-check reasoning this graph no longer depends on.
+// evidenceType is reused from the shared vocabulary deliberately — it is a
+// data enum (document/interview/audit/...), not reasoning logic.
 export const AchEvidenceZ = z.object({
   id: z.string().min(1).max(80),
   sourceLabel: z.string().min(1).max(120),
@@ -14,11 +11,6 @@ export const AchEvidenceZ = z.object({
   lineEnd: z.number().int().positive(),
   evidenceType: z.enum(EVIDENCE_TYPES),
   summary: z.string().min(1).max(1000),
-  // Admiralty grading is optional and model-supplied only when it has an
-  // actual basis — never auto-computed, never a stand-in for witness
-  // credibility. See server/lib/admiralty.js.
-  sourceReliability: z.enum(SOURCE_RELIABILITY_GRADES).nullable().catch(null),
-  informationCredibility: z.enum(INFORMATION_CREDIBILITY_GRADES).nullable().catch(null),
 });
 
 export const AchFindingZ = z.object({
@@ -35,12 +27,14 @@ export const AchHypothesisZ = z.object({
 });
 
 // marks is keyed by hypothesis id, which is model-chosen per case, so it
-// cannot be a fixed Zod object shape. Cell values are validated/defaulted
-// against ACH_MARKS defensively in server/lib/ach.js (an unknown or missing
-// mark reads as not_applicable, Heuer's "does not bear on this
-// hypothesis") rather than failing the whole call over one cell — the same
-// graduated-tolerance posture normalizeSufficiencyChecks used to use, kept
-// here at the cell level instead of the check level.
+// cannot be a fixed Zod object shape. Cell-level correctness (every active
+// hypothesis present, no unknown ids, no unknown mark values, one row per
+// valid evidence item, no duplicate rows) is enforced deterministically in
+// server/lib/ach.js's validateAchMatrix() AFTER this schema passes — a
+// structurally malformed or incomplete matrix fails the same way a schema
+// violation does (server/graph/investigation-graph.js's runEvidenceAnalysis
+// catch block), not by silently defaulting a missing/bad cell to
+// not_applicable.
 export const AchMatrixRowZ = z.object({
   evidenceId: z.string().min(1).max(80),
   marks: z.record(z.string(), z.string()),
@@ -96,6 +90,11 @@ export const NextActionZ = z.object({
 export const FinalRecommendationZ = z.object({
   recommendedDetermination: z.enum(["substantiated", "unsubstantiated", "inconclusive", "not_applicable"]),
   rationale: z.string().min(1).max(3000),
+  // Evidence ids the rationale actually relies on. Any id not present in
+  // validated evidence is deterministically stripped after the call
+  // (server/graph/investigation-graph.js buildFinalRecommendation) — never
+  // trusted as-is.
+  citedEvidenceIds: z.array(z.string().max(80)).max(30).catch([]),
   whatCouldChangeThis: z.string().min(1).max(1000),
 });
 

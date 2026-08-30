@@ -62,7 +62,7 @@ describe.skipIf(!hasLiveKey)("investigation graph — live medication-diversion 
     expect(opened.values.achMatrix.length).toBeGreaterThan(0);
     expect(opened.values.achResult.ranking.length).toBe(opened.values.hypotheses.length);
 
-    if (opened.next.includes("readyForHumanReview")) {
+    if (opened.next.includes("finalHumanReviewInterrupt")) {
       // Evidence was already judged sufficient on the first pass — still a
       // valid outcome; assert the full recommendation packet is present
       // and does not decide for the human.
@@ -101,7 +101,7 @@ describe.skipIf(!hasLiveKey)("investigation graph — live medication-diversion 
         && secondAction.evidenceOrPersonNeeded.trim().toLowerCase() === firstAction.evidenceOrPersonNeeded.trim().toLowerCase();
       expect(isRepeat).toBe(false);
     } else {
-      expect(resumedSnapshot.next).toContain("readyForHumanReview");
+      expect(resumedSnapshot.next).toContain("finalHumanReviewInterrupt");
       const packet = resumedSnapshot.tasks.find((t) => t.interrupts.length > 0).interrupts[0].value.finalRecommendation;
       expect(packet.humanFinalDetermination).toBe("pending");
     }
