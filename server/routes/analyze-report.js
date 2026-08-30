@@ -35,13 +35,13 @@ if (!configuredSigningSecret) {
 const VALID_DECISIONS = ["substantiated", "unsubstantiated", "needs_more_info"];
 const VALID_RISK = ["low", "moderate", "high", "critical"];
 const VALID_TIERS = ["re-education", "written_warning", "consider_termination", "recommend_termination", "policy_review"];
-const EVIDENCE_TYPES = ["document", "interview", "audit", "system_record", "policy", "other"];
-const EVIDENCE_STANCES = ["supports", "contradicts", "context"];
-const EVIDENCE_STATUSES = ["corroborated", "supported", "single_source", "contradicted", "insufficient"];
+export const EVIDENCE_TYPES = ["document", "interview", "audit", "system_record", "policy", "other"];
+export const EVIDENCE_STANCES = ["supports", "contradicts", "context"];
+export const EVIDENCE_STATUSES = ["corroborated", "supported", "single_source", "contradicted", "insufficient"];
 const DISCIPLINE_IMPACTS = ["mitigating", "neutral", "aggravating", "unknown"];
-const HYPOTHESIS_STATES = ["supported", "partially_supported", "weakened", "unresolved", "contradicted"];
-const SUFFICIENCY_CHECK_STATUSES = ["satisfied", "unresolved", "not_applicable"];
-const SUFFICIENCY_CHECK_IDS = [
+export const HYPOTHESIS_STATES = ["supported", "partially_supported", "weakened", "unresolved", "contradicted"];
+export const SUFFICIENCY_CHECK_STATUSES = ["satisfied", "unresolved", "not_applicable"];
+export const SUFFICIENCY_CHECK_IDS = [
   "finding_support",
   "contradictory_evidence",
   "objective_records",
@@ -205,7 +205,7 @@ const researchTaxonomySchema = {
   required: ["category"],
 };
 
-const EvidenceZ = z.object({
+export const EvidenceZ = z.object({
   id: z.string().min(1).max(80),
   sourceLabel: z.string().min(1).max(120),
   lineStart: z.number().int().positive(),
@@ -220,7 +220,7 @@ const EvidenceZ = z.object({
 // identity/content fields (id, statement, summary, etc.) stay strict —
 // those are core content, not auxiliary references, and a malformed one
 // should surface as an error rather than vanish silently.
-const FindingZ = z.object({
+export const FindingZ = z.object({
   id: z.string().min(1).max(80),
   statement: z.string().min(1).max(2000),
   inference: z.string().max(2000),
@@ -228,7 +228,7 @@ const FindingZ = z.object({
   supportingEvidenceIds: z.array(z.string().max(80)).max(50).catch([]),
   contradictingEvidenceIds: z.array(z.string().max(80)).max(50).catch([]),
 });
-const HypothesisZ = z.object({
+export const HypothesisZ = z.object({
   id: z.string().min(1).max(80),
   label: z.string().min(1).max(200),
   description: z.string().min(1).max(2000),
@@ -237,7 +237,7 @@ const HypothesisZ = z.object({
   contradictingEvidenceIds: z.array(z.string().max(80)).max(50).catch([]),
   unresolvedQuestions: z.array(z.string().max(1000)).max(20).catch([]),
 });
-const SufficiencyCheckZ = z.object({
+export const SufficiencyCheckZ = z.object({
   id: z.enum(SUFFICIENCY_CHECK_IDS),
   status: z.enum(SUFFICIENCY_CHECK_STATUSES),
   material: z.boolean(),
@@ -306,7 +306,7 @@ export const ClassificationZ = z.object({
 // instead of either crashing the request or silently defaulting to
 // ready_to_close (deriveClosureAssessment can't tell "the model skipped
 // this" from "there's genuinely nothing left to resolve").
-function normalizeSufficiencyChecks(rawChecks) {
+export function normalizeSufficiencyChecks(rawChecks) {
   const byId = new Map();
   for (const raw of Array.isArray(rawChecks) ? rawChecks : []) {
     if (!raw || typeof raw !== "object") continue;
