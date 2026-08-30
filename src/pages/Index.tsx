@@ -358,6 +358,7 @@ const Index = () => {
               </div>
 
               <div className="px-5 py-2 border-b border-border flex items-center justify-end gap-2">
+                <button onClick={() => navigate("/investigator")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary/20 bg-primary/5 text-primary text-xs font-bold transition-all hover:bg-primary/10 whitespace-nowrap"><Sparkles className="h-3.5 w-3.5" /> Lead Investigator</button>
                 <button onClick={handleUseSample} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold transition-all hover:bg-primary/90 neu-button whitespace-nowrap"><FileText className="h-3.5 w-3.5" /> Try Sample</button>
                 {hasContent && (
                   <button onClick={handleReset} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-destructive/70 hover:text-destructive font-medium transition-colors whitespace-nowrap"><RotateCcw className="h-3 w-3" /> Clear</button>

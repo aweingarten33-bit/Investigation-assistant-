@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import analyzeReportRouter from "./routes/analyze-report.js";
 import investigationToolkitRouter from "./routes/investigation-toolkit.js";
-import investigationGraphRouter from "./routes/investigation-graph.js";
+import investigationsRouter from "./routes/investigations.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(__dirname, "..", "dist");
@@ -19,7 +19,7 @@ app.get("/health", (req, res) => res.status(200).send("OK"));
 
 app.use("/api/analyze-report", analyzeReportRouter);
 app.use("/api/investigation-toolkit", investigationToolkitRouter);
-app.use("/api/investigation-graph", investigationGraphRouter);
+app.use("/api/investigations", investigationsRouter);
 
 // Body-parser errors (oversized or malformed JSON) land here — same response
 // shape the API routes already use for their own validation failures.
