@@ -65,9 +65,31 @@ export interface InvestigationCaseState {
   errors?: { node: string; message: string; at: string }[];
 }
 
+const KEY_STORAGE = "investigations-api-key";
+
+// Sends the access key (asked for once, kept in this browser's localStorage).
+// On a 401, asks again and retries once.
+async function authedFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const send = () => {
+    const key = window.localStorage.getItem(KEY_STORAGE);
+    const headers = new Headers(init.headers);
+    if (key) headers.set("Authorization", `Bearer ${key}`);
+    return fetch(path, { ...init, headers });
+  };
+  let res = await send();
+  if (res.status === 401) {
+    const entered = window.prompt("Enter the access key for Lead Investigator");
+    if (entered) {
+      window.localStorage.setItem(KEY_STORAGE, entered.trim());
+      res = await send();
+    }
+  }
+  return res;
+}
+
 async function post<T>(path: string, body: unknown): Promise<{ data: T | null; error: Error | null }> {
   try {
-    const res = await fetch(path, {
+    const res = await authedFetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -93,7 +115,7 @@ export function resumeInvestigationCase(caseId: string, body: { resultType: stri
 
 export async function getInvestigationCaseState(caseId: string): Promise<{ data: InvestigationCaseState | null; error: Error | null }> {
   try {
-    const res = await fetch(`/api/investigations/${encodeURIComponent(caseId)}/state`);
+    const res = await authedFetch(`/api/investigations/${encodeURIComponent(caseId)}/state`);
     const json = await res.json().catch(() => null);
     if (!res.ok) {
       const message = json && typeof json.error === "string" ? json.error : `Request failed (${res.status})`;

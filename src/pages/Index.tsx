@@ -40,7 +40,7 @@ async function extractPdfText(file: File): Promise<string> {
   const loadingTask = getDocument({
     data: new Uint8Array(arrayBuffer),
     isEvalSupported: false,
-  });
+  } as Parameters<typeof getDocument>[0]);
   const pdf = await loadingTask.promise;
   const pages: string[] = [];
 

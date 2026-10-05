@@ -1,4 +1,6 @@
 import express from "express";
+import fs from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
@@ -18,6 +20,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // a Render persistent disk (or moving to a hosted Postgres checkpointer
 // later) is the production-hardening step, deliberately out of scope here.
 const DB_PATH = process.env.INVESTIGATION_GRAPH_DB_PATH || path.join(__dirname, "..", "..", "data", "investigation-graph.sqlite");
+
+// A fresh deploy has no data/ directory, and SQLite will not create it.
+fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 function checkpointer() {
   return SqliteSaver.fromConnString(DB_PATH);
@@ -84,13 +89,41 @@ function describeSnapshot(snapshot) {
   return { status: values?.graphStatus === "error" ? "error" : "complete", ...publicState(values) };
 }
 
+// Access control. Set INVESTIGATIONS_API_KEY and every request must send it
+// (Authorization: Bearer <key> or X-API-Key). Fails closed: wrong or missing
+// key is a 401. If the key is NOT set, production (NODE_ENV=production or on
+// Render) refuses all requests with a 503; only local dev stays open.
+export function requireInvestigationsKey(req, res, next) {
+  const expected = process.env.INVESTIGATIONS_API_KEY;
+  if (!expected) {
+    if (process.env.NODE_ENV === "production" || process.env.RENDER) {
+      return res.status(503).json({ error: "INVESTIGATIONS_API_KEY is not configured on the server." });
+    }
+    return next();
+  }
+  const auth = req.get("authorization") || "";
+  const provided = req.get("x-api-key") || (auth.startsWith("Bearer ") ? auth.slice(7) : "");
+  const hash = (v) => crypto.createHash("sha256").update(v).digest();
+  if (!provided || !crypto.timingSafeEqual(hash(provided), hash(expected))) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
+}
+
+// Case IDs must be long and unguessable (client uses crypto.randomUUID).
+export const CASE_ID_PATTERN = /^[A-Za-z0-9_-]{24,128}$/;
+
 const router = express.Router();
+router.use(requireInvestigationsKey);
 router.use(express.json({ limit: "2mb" }));
 
 router.post("/:caseId/start", async (req, res) => {
   try {
     const { caseId } = req.params;
     if (!caseId || !caseId.trim()) return res.status(400).json({ error: "caseId is required" });
+    if (!CASE_ID_PATTERN.test(caseId)) {
+      return res.status(400).json({ error: "caseId must be 24-128 characters (letters, digits, - or _)" });
+    }
 
     const parsed = parseStartBody(req.body);
     if (!parsed.success) {

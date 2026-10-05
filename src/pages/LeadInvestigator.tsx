@@ -25,7 +25,7 @@ const RESULT_TYPE_OPTIONS: { value: HumanInputEntry["resultType"]; label: string
 ];
 
 function newCaseId() {
-  return `case-${Date.now().toString(36)}`;
+  return `case-${crypto.randomUUID()}`;
 }
 
 function StartCaseForm({ onStart, starting }: { onStart: (input: { caseId: string; caseObjective: string; allegations: string; caseNotes: string }) => void; starting: boolean }) {
@@ -329,7 +329,7 @@ const LeadInvestigator = () => {
         ) : (
           <StartCaseForm onStart={handleStart} starting={starting} />
         )}
-        <p className="mt-4 text-center text-[11px] text-muted-foreground">Personal-use demo — use anonymized data only. Reports are not saved by this app.</p>
+        <p className="mt-4 text-center text-[11px] text-muted-foreground">Personal-use demo — use anonymized data only. Lead Investigator cases are saved on the app server so you can resume them.</p>
       </div>
     </div>
   );

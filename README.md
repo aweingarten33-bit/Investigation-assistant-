@@ -236,6 +236,7 @@ GEMINI_API_KEY=...
 GEMINI_MODEL=...                            # required when provider=gemini
 
 CLASSIFICATION_SIGNING_SECRET=...           # recommended for a stable deployment
+INVESTIGATIONS_API_KEY=...                  # required in production; access key for /api/investigations
 PORT=3000
 ```
 

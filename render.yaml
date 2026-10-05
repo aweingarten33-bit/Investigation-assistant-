@@ -25,3 +25,11 @@ services:
         sync: false
       - key: CLASSIFICATION_SIGNING_SECRET
         sync: false
+      # Required: access key for the Lead Investigator API. Without it the
+      # server refuses all /api/investigations requests in production.
+      - key: INVESTIGATIONS_API_KEY
+        sync: false
+      # Lead Investigator cases are stored in a local SQLite file
+      # (data/investigation-graph.sqlite). Without a persistent disk, cases
+      # are lost on each deploy. Optionally set INVESTIGATION_GRAPH_DB_PATH
+      # to a file on an attached disk to keep them.
