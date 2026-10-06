@@ -7,9 +7,9 @@ function apiKey() {
   return key;
 }
 
-// Defaults to gemini-2.5-flash; set GEMINI_MODEL to override.
+// Defaults to gemini-3.8-flash; set GEMINI_MODEL to override.
 function model() {
-  return process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  return process.env.GEMINI_MODEL || "gemini-3.8-flash";
 }
 
 function describeError(status, rawText) {

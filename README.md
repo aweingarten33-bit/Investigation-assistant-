@@ -233,7 +233,7 @@ OPENAI_API_KEY=...
 OPENAI_MODEL=...                            # required when provider=openai
 
 GEMINI_API_KEY=...
-GEMINI_MODEL=gemini-2.5-flash               # default when unset
+GEMINI_MODEL=gemini-3.8-flash               # default when unset
 
 CLASSIFICATION_SIGNING_SECRET=...           # recommended for a stable deployment
 INVESTIGATIONS_API_KEY=...                  # required in production; access key for /api/investigations
