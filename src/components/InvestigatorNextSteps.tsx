@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { callApi } from "@/lib/api";
-import type { AnalysisResult } from "@/lib/types";
+import type { AnalysisResult, ClosureStatus } from "@/lib/types";
 
 type InvestigatorPlan = {
   bottomLine: string;
@@ -79,12 +79,39 @@ function buildAnalysisSummary(result: AnalysisResult) {
   }, null, 2);
 }
 
+const DEFAULT_DESCRIPTION = "Generate a case-specific investigator plan based on the evidence map, competing hypotheses, and closure gate: what to preserve, what records to pull, who to interview, the exact questions to ask, contradictions to resolve, and what to retest after corrective action.";
+
 export function InvestigatorNextSteps({ result, caseNotes }: { result: AnalysisResult; caseNotes: string }) {
+  const analysisSummary = useMemo(() => buildAnalysisSummary(result), [result]);
+  return (
+    <NextStepsPlanner
+      caseNotes={caseNotes}
+      analysisSummary={analysisSummary}
+      closureStatus={result.closureAssessment.status}
+      closureRationale={result.closureAssessment.rationale}
+    />
+  );
+}
+
+// The planner itself works from any caseNotes + analysisSummary pair: the
+// live analysis above, or a re-uploaded prior export (ContinueFromExport).
+// closureStatus is null when the source didn't record one.
+export function NextStepsPlanner({
+  caseNotes,
+  analysisSummary,
+  closureStatus,
+  closureRationale,
+  description = DEFAULT_DESCRIPTION,
+}: {
+  caseNotes: string;
+  analysisSummary: string;
+  closureStatus: ClosureStatus | null;
+  closureRationale: string;
+  description?: string;
+}) {
   const [plan, setPlan] = useState<InvestigatorPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const analysisSummary = useMemo(() => buildAnalysisSummary(result), [result]);
-  const closureStatus = result.closureAssessment.status;
   const isReady = closureStatus === "ready_to_close";
   const isLimitedClosure = closureStatus === "ready_with_unresolved_limitations";
 
@@ -113,7 +140,7 @@ export function InvestigatorNextSteps({ result, caseNotes }: { result: AnalysisR
           <div className="flex-1">
             <p className="text-sm font-semibold text-foreground">What should I do next?</p>
             <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-              Generate a case-specific investigator plan based on the evidence map, competing hypotheses, and closure gate: what to preserve, what records to pull, who to interview, the exact questions to ask, contradictions to resolve, and what to retest after corrective action.
+              {description}
             </p>
             <Button type="button" onClick={generate} disabled={loading || !caseNotes.trim()} className="mt-3 h-9 text-xs">
               {loading ? <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />Building my next steps...</> : <><Sparkles className="h-3.5 w-3.5 mr-1.5" />Build My Next Steps</>}
@@ -125,12 +152,14 @@ export function InvestigatorNextSteps({ result, caseNotes }: { result: AnalysisR
     );
   }
 
-  const statusLabel = isReady
-    ? "Ready to close"
-    : isLimitedClosure
-      ? "Ready with unresolved limitations"
-      : "Keep investigating";
-  const statusReason = result.closureAssessment.rationale || plan.closeoutReason;
+  const statusLabel = closureStatus === null
+    ? "Closure status not recorded"
+    : isReady
+      ? "Ready to close"
+      : isLimitedClosure
+        ? "Ready with unresolved limitations"
+        : "Keep investigating";
+  const statusReason = closureRationale || plan.closeoutReason;
 
   return (
     <div className="rounded-xl border border-primary/25 bg-card overflow-hidden">
@@ -143,7 +172,7 @@ export function InvestigatorNextSteps({ result, caseNotes }: { result: AnalysisR
             <div className={`mt-2 rounded-md px-3 py-2 text-xs ${isReady ? "bg-success/10 text-success" : "bg-warning/10 text-foreground"}`}>
               <strong>{statusLabel}:</strong> {statusReason}
             </div>
-            {plan.readyToClose !== isReady && !isLimitedClosure && (
+            {closureStatus !== null && plan.readyToClose !== isReady && !isLimitedClosure && (
               <p className="mt-1.5 text-[10px] text-muted-foreground">The server-derived closure gate controls this status; the optional planner cannot override it.</p>
             )}
           </div>

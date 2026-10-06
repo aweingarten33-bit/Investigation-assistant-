@@ -52,6 +52,10 @@ The main result includes an optional **What should I do next?** action. It sends
 
 The planner is deliberately on-demand so it does not slow the normal two-step analysis/report flow or add an extra provider call unless the investigator actually wants it.
 
+### Continuing a case: re-upload your last export
+
+The app is stateless: it saves no cases on the server or in the browser. The Word export is the system of record. To continue a case, open **Continue from a previous export** on the main page and upload the last `.docx` report you exported. The app reads the export's sections (findings, evidence appendix, closure gate, missing information, and My Final Decision if recorded) and runs the same next-step planner on them. You can optionally attach or paste your original notes, since the export holds the prior analysis rather than the raw notes. If the file isn't an export from this app, or its findings or closure-gate sections are missing, the app says so instead of guessing.
+
 ## Human review and case provenance
 
 The result includes an optional **My Final Decision** section. The investigator can record:
@@ -239,7 +243,6 @@ DEEPSEEK_API_KEY=...
 DEEPSEEK_MODEL=deepseek-flash               # default when unset; no web search
 
 CLASSIFICATION_SIGNING_SECRET=...           # recommended for a stable deployment
-INVESTIGATIONS_API_KEY=...                  # required in production; access key for /api/investigations
 PORT=3000
 ```
 

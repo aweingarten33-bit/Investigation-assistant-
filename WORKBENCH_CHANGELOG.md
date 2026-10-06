@@ -26,6 +26,8 @@ This branch upgrades the app into a stronger evidence-grounded **Compliance & Pr
 - Deterministic eval-scoring tests run in normal CI; live provider calls remain opt-in because they cost money and can vary across model versions.
 - Provider-neutral privacy disclosure.
 - Expanded automated tests and CI (syntax, unit tests, production dependency audit, production build, lint).
+- Removed the Lead Investigator mode and its server-side saved cases (SQLite checkpointer, `/api/investigations`, `INVESTIGATIONS_API_KEY`, and the LangGraph dependencies). The app is now fully stateless and the Word export is the system of record. Previously saved Lead Investigator cases are gone; only cases that were exported can be continued.
+- Continue from a previous export: re-upload a prior Word export (optionally with the original notes) to run the next-step planner without any saved case state.
 
 ## Personal-use scope
 

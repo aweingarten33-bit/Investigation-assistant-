@@ -1,16 +1,15 @@
 import { useState, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import mammoth from "mammoth";
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
-import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { callApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { UploadZone } from "@/components/UploadZone";
 import { AnalysisResults } from "@/components/AnalysisResults";
+import { ContinueFromExport } from "@/components/ContinueFromExport";
 import { PiiReminder } from "@/components/PiiReminder";
 import { Disclaimer } from "@/components/Disclaimer";
 import { OrganizationDisciplineMatrix } from "@/components/OrganizationDisciplineMatrix";
 import { exportToDocx } from "@/lib/docx-export";
+import { extractDocxText, extractPdfText } from "@/lib/file-text";
 import { AnalysisResult, HumanReviewRecord } from "@/lib/types";
 import {
   buildOrganizationContext,
@@ -26,38 +25,12 @@ import {
 import { toast } from "sonner";
 import { HomeToolkitMenuButton } from "@/components/ToolkitMenu";
 
-GlobalWorkerOptions.workerSrc = pdfWorker;
-
 const MIN_REPORT_LENGTH = 50;
 const MAX_REPORT_LENGTH = 100_000;
 const MAX_ORG_CONTEXT = 40_000;
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 const MAX_UPLOAD_FILES = 12;
 const ANALYSIS_VERSION = "investigation-assistant-personal-v3";
-
-async function extractPdfText(file: File): Promise<string> {
-  const arrayBuffer = await file.arrayBuffer();
-  const loadingTask = getDocument({
-    data: new Uint8Array(arrayBuffer),
-    isEvalSupported: false,
-  } as Parameters<typeof getDocument>[0]);
-  const pdf = await loadingTask.promise;
-  const pages: string[] = [];
-
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-    const page = await pdf.getPage(pageNumber);
-    const textContent = await page.getTextContent();
-    const pageText = textContent.items
-      .map((item) => ("str" in item ? item.str : ""))
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (pageText) pages.push(`[PDF Page ${pageNumber}] ${pageText}`);
-  }
-
-  return pages.join("\n");
-}
 
 const Index = () => {
   const navigate = useNavigate();
@@ -131,9 +104,7 @@ const Index = () => {
         let value = "";
 
         if (lower.endsWith(".docx")) {
-          const arrayBuffer = await file.arrayBuffer();
-          const extracted = await mammoth.extractRawText({ arrayBuffer });
-          value = extracted.value;
+          value = await extractDocxText(file);
         } else {
           value = await extractPdfText(file);
           if (!value.trim()) unreadablePdfs.push(file.name);
@@ -358,7 +329,6 @@ const Index = () => {
               </div>
 
               <div className="px-5 py-2 border-b border-border flex items-center justify-end gap-2">
-                <button onClick={() => navigate("/investigator")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary/20 bg-primary/5 text-primary text-xs font-bold transition-all hover:bg-primary/10 whitespace-nowrap"><Sparkles className="h-3.5 w-3.5" /> Lead Investigator</button>
                 <button onClick={handleUseSample} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold transition-all hover:bg-primary/90 neu-button whitespace-nowrap"><FileText className="h-3.5 w-3.5" /> Try Sample</button>
                 {hasContent && (
                   <button onClick={handleReset} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-destructive/70 hover:text-destructive font-medium transition-colors whitespace-nowrap"><RotateCcw className="h-3 w-3" /> Clear</button>
@@ -399,6 +369,8 @@ const Index = () => {
 
               {!hasContent && !isAnalyzing && <p className="text-xs text-muted-foreground text-center">Paste notes or upload one or more DOCX/PDF source files to get started</p>}
             </div>
+
+            <ContinueFromExport />
 
             <div className="mt-3"><Disclaimer /></div>
           </>

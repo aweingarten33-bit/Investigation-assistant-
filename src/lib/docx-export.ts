@@ -9,7 +9,9 @@ import {
 import { saveAs } from "file-saver";
 import { AnalysisResult } from "./types";
 
-export async function exportToDocx(result: AnalysisResult) {
+// Builds the Word report. Kept separate from the download so tests can render
+// a real export and round-trip it through the prior-export parser.
+export function buildReportDocument(result: AnalysisResult): Document {
   const decisionLabel = result.decision === "needs_more_info" ? "NEEDS MORE INFO" : result.decision.toUpperCase();
   const decisionColor = result.decision === "substantiated" ? "DC2626" : result.decision === "unsubstantiated" ? "16A34A" : "D97706";
   const closureLabel = result.closureAssessment.status.replace(/_/g, " ").toUpperCase();
@@ -182,11 +184,13 @@ export async function exportToDocx(result: AnalysisResult) {
   children.push(new Paragraph({ children: [new TextRun({ text: "Confidential – Internal Use Only", size: 16, color: "999999", font: "Arial", italics: true })], spacing: { after: 50 } }));
   children.push(new Paragraph({ children: [new TextRun({ text: "Demo version – use anonymized data only. Production deployment requires appropriate privacy/security review, agreements, access controls, persistent authenticated audit logging, and secure hosting.", size: 16, color: "999999", font: "Arial", italics: true })] }));
 
-  const doc = new Document({
+  return new Document({
     sections: [{ properties: { type: SectionType.CONTINUOUS, page: { margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } }, children }],
   });
+}
 
-  const blob = await Packer.toBlob(doc);
+export async function exportToDocx(result: AnalysisResult) {
+  const blob = await Packer.toBlob(buildReportDocument(result));
   const dateStr = new Date().toISOString().split("T")[0];
   saveAs(blob, `Compliance_Report_${result.caseId}_${dateStr}.docx`);
 }

@@ -51,6 +51,8 @@ The optional planner is intentionally practical rather than report-like. It can 
 
 It is on-demand so the normal report flow remains fast and does not incur another provider call unless wanted.
 
+The planner can also run from a re-uploaded Word export (**Continue from a previous export**), optionally with the original notes attached. Nothing is persisted server-side; the export is the case record.
+
 ## Search/privacy boundary
 
 Previous behavior sent raw case text into a search-enabled model call while relying on prompt instructions not to search identifiers. That was not a real privacy boundary.
