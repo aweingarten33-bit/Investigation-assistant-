@@ -224,7 +224,7 @@ Open `http://localhost:8080`.
 ## Environment variables
 
 ```sh
-AI_PROVIDER=anthropic                       # anthropic | openai | gemini
+AI_PROVIDER=gemini                          # gemini (default) | anthropic | openai
 
 ANTHROPIC_API_KEY=...
 ANTHROPIC_MODEL=claude-sonnet-5
@@ -233,7 +233,7 @@ OPENAI_API_KEY=...
 OPENAI_MODEL=...                            # required when provider=openai
 
 GEMINI_API_KEY=...
-GEMINI_MODEL=...                            # required when provider=gemini
+GEMINI_MODEL=gemini-2.5-flash               # default when unset
 
 CLASSIFICATION_SIGNING_SECRET=...           # recommended for a stable deployment
 INVESTIGATIONS_API_KEY=...                  # required in production; access key for /api/investigations

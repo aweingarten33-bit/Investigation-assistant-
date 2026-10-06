@@ -7,7 +7,7 @@ export { HttpError } from "./errors.js";
 const PROVIDERS = { anthropic, openai, gemini };
 
 function currentProvider() {
-  const name = (process.env.AI_PROVIDER || "anthropic").trim().toLowerCase();
+  const name = (process.env.AI_PROVIDER || "gemini").trim().toLowerCase();
   const provider = PROVIDERS[name];
   if (!provider) {
     throw new Error(`Unknown AI_PROVIDER "${name}" — must be one of: ${Object.keys(PROVIDERS).join(", ")}`);

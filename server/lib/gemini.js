@@ -7,13 +7,9 @@ function apiKey() {
   return key;
 }
 
-// No hardcoded fallback model here on purpose — a guessed model ID is
-// exactly what caused the last outage on the Anthropic side (see git log).
-// Set it explicitly to whatever's actually valid for your account.
+// Defaults to gemini-2.5-flash; set GEMINI_MODEL to override.
 function model() {
-  const m = process.env.GEMINI_MODEL;
-  if (!m) throw new HttpError("GEMINI_MODEL is not configured — set it to a valid model id from ai.google.dev/gemini-api/docs/models", 500);
-  return m;
+  return process.env.GEMINI_MODEL || "gemini-2.5-flash";
 }
 
 function describeError(status, rawText) {

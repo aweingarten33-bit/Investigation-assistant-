@@ -6,8 +6,8 @@ services:
     startCommand: npm start
     healthCheckPath: /health
     envVars:
-      # Which AI backend to use. Defaults to anthropic if unset — only set
-      # this if you're switching providers. Only the key/model pair for
+      # Which AI backend to use. Defaults to gemini (model gemini-2.5-flash)
+      # if unset — only set this if you're switching providers. Only the key/model pair for
       # whichever provider you pick needs a real value; leave the rest blank.
       - key: AI_PROVIDER
         sync: false
