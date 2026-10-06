@@ -1,10 +1,11 @@
 import * as anthropic from "./anthropic.js";
 import * as openai from "./openai.js";
 import * as gemini from "./gemini.js";
+import * as deepseek from "./deepseek.js";
 
 export { HttpError } from "./errors.js";
 
-const PROVIDERS = { anthropic, openai, gemini };
+const PROVIDERS = { anthropic, openai, gemini, deepseek };
 
 function currentProvider() {
   const name = (process.env.AI_PROVIDER || "gemini").trim().toLowerCase();
