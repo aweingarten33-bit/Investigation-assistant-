@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { UploadZone } from "@/components/UploadZone";
 import { AnalysisResults } from "@/components/AnalysisResults";
 import { ContinueFromExport } from "@/components/ContinueFromExport";
+import { AnalysisProgress, type ClassifySummary } from "@/components/AnalysisProgress";
 import { PiiReminder } from "@/components/PiiReminder";
 import { Disclaimer } from "@/components/Disclaimer";
 import { OrganizationDisciplineMatrix } from "@/components/OrganizationDisciplineMatrix";
@@ -42,6 +43,9 @@ const Index = () => {
   const [isSample, setIsSample] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeStep, setAnalyzeStep] = useState<0 | 1 | 2>(0);
+  const [classifyStartedAt, setClassifyStartedAt] = useState<number | null>(null);
+  const [reportStartedAt, setReportStartedAt] = useState<number | null>(null);
+  const [classifySummary, setClassifySummary] = useState<ClassifySummary | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const runIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
@@ -189,6 +193,9 @@ const Index = () => {
     setIsAnalyzing(true);
     setResult(null);
     setAnalyzeStep(1);
+    setClassifyStartedAt(Date.now());
+    setReportStartedAt(null);
+    setClassifySummary(null);
 
     try {
       const { data: classifyData, error: classifyError } = await callApi<{
@@ -214,6 +221,13 @@ const Index = () => {
       const inputHash = classifyData!.inputHash;
       const sources = classifyData!.sources;
       const researchTopic = classifyData!.researchTopic ?? null;
+      const counts = classification as { evidenceItems?: unknown[]; findings?: unknown[]; hypotheses?: unknown[] };
+      setClassifySummary({
+        evidenceCount: counts.evidenceItems?.length ?? 0,
+        findingCount: counts.findings?.length ?? 0,
+        hypothesisCount: counts.hypotheses?.length ?? 0,
+      });
+      setReportStartedAt(Date.now());
       setAnalyzeStep(2);
 
       const { data: reportData, error: reportError } = await callApi<Omit<AnalysisResult, "caseId">>(
@@ -357,11 +371,20 @@ const Index = () => {
             <div className="mt-3 space-y-1.5">
               <Button onClick={handleAnalyze} disabled={isAnalyzing || !hasContent} className={`w-full h-12 text-base font-semibold transition-all rounded-xl neu-button ${!hasContent && !isAnalyzing ? "opacity-40" : ""}`} size="lg">
                 {isAnalyzing ? (
-                  <><Loader2 className="mr-2 h-5 w-5 animate-spin" /><span className="animate-pulse-subtle">{analyzeStep === 1 ? "Step 1/2 — Mapping evidence & decision support..." : "Step 2/2 — Generating report..."}</span></>
+                  <><Loader2 className="mr-2 h-5 w-5 animate-spin" />Analyzing…</>
                 ) : (
-                  <><Sparkles className="mr-2 h-5 w-5" />Analyze & Generate Report</>
+                  <><Sparkles className="mr-2 h-5 w-5" />Analyze</>
                 )}
               </Button>
+
+              {isAnalyzing && analyzeStep !== 0 && (
+                <AnalysisProgress
+                  step={analyzeStep}
+                  classifyStartedAt={classifyStartedAt}
+                  reportStartedAt={reportStartedAt}
+                  classifySummary={classifySummary}
+                />
+              )}
 
               {isAnalyzing && (
                 <Button onClick={handleCancel} variant="ghost" className="w-full h-9 text-sm text-muted-foreground hover:text-destructive"><XCircle className="mr-2 h-4 w-4" />Cancel</Button>
