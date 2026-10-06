@@ -53,12 +53,14 @@ async function chatCompletion(body) {
   return data;
 }
 
-// Structured output via forced function-calling.
+// Structured output via function-calling. DeepSeek's thinking mode rejects a
+// forced (named) tool_choice, so tool_choice is omitted (defaults to auto) and
+// the system prompt tells the model to answer through the single tool.
 export async function callStructured(systemPrompt, userMessage, schema, toolName, maxTokens = 4096) {
   const data = await chatCompletion({
     max_tokens: maxTokens,
     messages: [
-      { role: "system", content: systemPrompt },
+      { role: "system", content: `${systemPrompt}\n\nRespond only by calling the ${toolName} function.` },
       { role: "user", content: userMessage },
     ],
     tools: [{
@@ -69,7 +71,6 @@ export async function callStructured(systemPrompt, userMessage, schema, toolName
         parameters: schema,
       },
     }],
-    tool_choice: { type: "function", function: { name: toolName } },
   });
 
   const call = data.choices?.[0]?.message?.tool_calls?.[0];
