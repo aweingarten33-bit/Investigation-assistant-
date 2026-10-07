@@ -16,7 +16,8 @@ export async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_TI
     return await fetch(url, { ...options, signal: controller.signal });
   } catch (error) {
     if (error.name === "AbortError") {
-      throw new HttpError(`The AI provider did not respond within ${Math.round(timeoutMs / 1000)} seconds. Please try again.`, 504);
+      const message = `The AI provider did not respond within ${Math.round(timeoutMs / 1000)} seconds. Please try again.`;
+      throw new HttpError(message, 504, { publicMessage: message });
     }
     throw error;
   } finally {

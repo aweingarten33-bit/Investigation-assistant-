@@ -1,4 +1,4 @@
-import { HttpError } from "./errors.js";
+import { HttpError, SEARCH_UNSUPPORTED } from "./errors.js";
 import { fetchWithTimeout } from "./fetch-with-timeout.js";
 
 function apiKey() {
@@ -88,8 +88,14 @@ export async function callStructured(systemPrompt, userMessage, schema, toolName
 
 // Free-text output.
 export async function callText(systemPrompt, userMessage) {
+  return (await callTextDetailed(systemPrompt, userMessage)).text;
+}
+
+// Same as callText, but also reports whether the output hit the token limit.
+// chatCompletion already logs finish_reason=length; this surfaces it.
+export async function callTextDetailed(systemPrompt, userMessage, { maxTokens = 2048 } = {}) {
   const data = await chatCompletion({
-    max_tokens: 2048,
+    max_tokens: maxTokens,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userMessage },
@@ -101,14 +107,19 @@ export async function callText(systemPrompt, userMessage) {
     console.error("No content in response:", JSON.stringify(data));
     throw new Error("No response from AI");
   }
-  return text;
+  return { text, truncated: data.choices?.[0]?.finish_reason === "length" };
 }
 
 // DeepSeek's API has no web-search tool, so grounded calls fail clearly
 // instead of silently returning ungrounded text.
+export function supportsWebSearch() {
+  return false;
+}
+
 export async function callTextWithSearch() {
   throw new HttpError(
     "DeepSeek does not support web search. Switch AI_PROVIDER to anthropic or gemini for regulatory web research.",
     400,
+    { code: SEARCH_UNSUPPORTED, publicMessage: "Web search isn't available with the AI provider this app is using." },
   );
 }

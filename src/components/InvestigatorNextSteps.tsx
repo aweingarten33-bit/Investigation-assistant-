@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { callApi } from "@/lib/api";
+import { useSessionState } from "@/lib/session-state";
 import type { AnalysisResult, ClosureStatus } from "@/lib/types";
 
 type InvestigatorPlan = {
@@ -109,7 +110,8 @@ export function NextStepsPlanner({
   closureRationale: string;
   description?: string;
 }) {
-  const [plan, setPlan] = useState<InvestigatorPlan | null>(null);
+  // Kept for these exact inputs across in-app navigation.
+  const [plan, setPlan] = useSessionState<InvestigatorPlan | null>(`plan:${caseNotes}\u0000${analysisSummary}`, null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isReady = closureStatus === "ready_to_close";

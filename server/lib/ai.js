@@ -33,6 +33,18 @@ export async function callText(systemPrompt, userMessage) {
   return currentProvider().callText(systemPrompt, userMessage);
 }
 
+// Free-text output plus { truncated } when the provider stopped at the token
+// limit. Used where a cut-off document must not be presented as complete.
+export async function callTextDetailed(systemPrompt, userMessage, options) {
+  return currentProvider().callTextDetailed(systemPrompt, userMessage, options);
+}
+
+// Whether the configured provider/model can run callTextWithSearch. Lets the
+// UI hide search-backed features instead of surfacing a provider error.
+export function supportsWebSearch() {
+  return currentProvider().supportsWebSearch();
+}
+
 // Free-text output grounded in live web search — returns { text, sources }.
 // maxUses lets investigation research spend more search calls when looking
 // for analogous public enforcement cases while still keeping a hard cap.

@@ -61,7 +61,12 @@ describe("investigation evidence utilities", () => {
 
     expect(result.evidenceItems[0].excerpt).toBe("Employee A stated access was for work purposes.");
     expect(result.evidenceItems[1].reference).toBe("Access Audit — line 4");
-    expect(result.findings[0].evidenceStatus).toBe("contradicted");
+    // A work-purpose explanation does not dispute that the access happened,
+    // and the model gave no conflicts entry: not a contradiction. The
+    // explanation is kept as related context instead.
+    expect(result.findings[0].evidenceStatus).toBe("single_source");
+    expect(result.findings[0].contradictingEvidenceIds).toEqual([]);
+    expect(result.findings[0].contextEvidenceIds).toEqual(["E1"]);
   });
 
   it("drops invented evidence references from findings", () => {
@@ -103,7 +108,7 @@ describe("investigation evidence utilities", () => {
     expect(result.evidenceItems).toEqual([]);
   });
 
-  it("marks contradiction-only findings contradicted", () => {
+  it("does not mark a finding contradicted when nothing supports it (no two sources in conflict)", () => {
     const result = hydrateEvidenceTraceability(baseClassification({
       evidenceItems: [
         { id: "E1", sourceLabel: "Interview", lineStart: 1, lineEnd: 1, evidenceType: "interview", stance: "contradicts", summary: "Contrary evidence" },
@@ -112,7 +117,8 @@ describe("investigation evidence utilities", () => {
         { id: "F1", statement: "Finding", inference: "Inference", evidenceStatus: "supported", supportingEvidenceIds: [], contradictingEvidenceIds: ["E1"] },
       ],
     }), "Contrary evidence");
-    expect(result.findings[0].evidenceStatus).toBe("contradicted");
+    expect(result.findings[0].evidenceStatus).toBe("insufficient");
+    expect(result.findings[0].contextEvidenceIds).toEqual(["E1"]);
   });
 
   it("marks a finding corroborated only when two valid supporting items remain and no contradiction remains", () => {

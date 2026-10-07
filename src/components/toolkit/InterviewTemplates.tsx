@@ -16,12 +16,14 @@ const TEMPLATES = [
         content: `Thanks for meeting with me. I'm conducting an internal review of [general description]. Here's what you need to know:
 
 • I want your honest recollection. There are no wrong answers.
-• This conversation is confidential — don't discuss it with anyone, including coworkers.
+• [If your policy and counsel support it:] To protect the integrity of this review and the people involved, I'm asking you to be discreet about the details we discuss today. [State the specific reason.]
 • Your cooperation is appreciated and expected.
 • Retaliation against anyone involved is strictly prohibited.
 • Only tell me what YOU personally know or saw — not rumors or guesses.
 
-Any questions before we start?`,
+Any questions before we start?
+
+[Confidentiality is a judgment call, not a standard order. Ask for discretion for a stated, case-specific reason (protecting the integrity of the review, a witness, or patient privacy). Avoid a blanket instruction not to discuss the matter with anyone, including coworkers: in the U.S., blanket gag instructions to non-supervisory employees can conflict with NLRA Section 7 rights, and some state laws and union contracts limit them further. Check your policy and counsel for the wording to use.]`,
       },
       {
         heading: "Background",
@@ -62,7 +64,7 @@ THEN NARROW DOWN:
 4. Have you experienced or witnessed any retaliation?
 5. Do you have any questions for me?
 
-[Remind about confidentiality. Thank them. Say you may need to follow up.]`,
+[If you made a discretion request, repeat it with the same reason. Thank them. Say you may need to follow up.]`,
       },
     ],
   },
@@ -70,9 +72,9 @@ THEN NARROW DOWN:
     id: "subject",
     title: "Subject Interview",
     icon: AlertTriangle,
-    badge: "Do This Last",
+    badge: "Usually Later",
     badgeColor: "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300",
-    when: "For the person being investigated. ALWAYS interview them LAST after you have all the facts.",
+    when: "For the person being investigated. Often best after witnesses and key records, so you can put specific facts to them — but timing is a judgment call. See the timing note below and check your policy, any union contract, and counsel.",
     sections: [
       {
         heading: "Opening — Read This Out Loud",
@@ -80,12 +82,14 @@ THEN NARROW DOWN:
 
 • This is an internal investigation — I'm not law enforcement.
 • I want your honest account of events.
-• This conversation is confidential — don't discuss it with coworkers.
+• [If your policy and counsel support it:] I'm asking you to be discreet about the details of this review while it's open, so witnesses aren't influenced. [State the specific reason.]
 • Your cooperation is expected.
 • Retaliation against anyone is prohibited.
 • [If applicable: I represent the organization, not you personally. You can seek your own attorney at any time.]
 
-Do you understand? Any questions?`,
+Do you understand? Any questions?
+
+[Confidentiality is a judgment call, not a standard order. Ask for discretion for a stated, case-specific reason (protecting the integrity of the review, a witness, or patient privacy). Avoid a blanket instruction not to discuss the matter with anyone, including coworkers: in the U.S., blanket gag instructions to non-supervisory employees can conflict with NLRA Section 7 rights, and some state laws and union contracts limit them further. Check your policy and counsel for the wording to use.]`,
       },
       {
         heading: "Background & Context",
@@ -115,7 +119,19 @@ Do you understand? Any questions?`,
 • Any documents I should review?
 • Any retaliation concerns?
 
-[Remind about confidentiality. Do NOT tell them the outcome or your preliminary conclusions.]`,
+[If you made a discretion request, repeat it with the same reason. Don't share the outcome or your preliminary conclusions.]`,
+      },
+      {
+        heading: "Timing — When to Interview the Subject",
+        content: `Interviewing the subject after witnesses and key records is common practice because it lets you put specific facts to them and reduces the chance of evidence being shaped. It is a default, not a rule.
+
+Consider interviewing earlier when:
+• evidence could be lost or altered, or access needs to be removed promptly;
+• the subject's account is needed to know which records or witnesses matter;
+• fairness, a union contract (e.g. representation or notice rights), or your policy requires prompt notice;
+• the subject may be on leave, leaving, or otherwise unavailable later.
+
+Whatever order you choose, give the subject a fair chance to respond to the material facts relied on, and re-interview if new evidence emerges. Check your policy, any union contract, and counsel when in doubt.`,
       },
     ],
   },
@@ -139,7 +155,7 @@ Do you understand? Any questions?`,
 
 4. This conversation is protected by attorney-client privilege. BUT — the privilege belongs to the organization, not you. The organization may share this conversation with anyone, including the government, at any time.
 
-5. You must keep this conversation confidential. Don't discuss it with anyone other than the organization's counsel.
+5. To help protect the privilege, we ask that you keep the substance of this conversation confidential. [Counsel should confirm the exact wording; a blanket instruction not to discuss workplace matters can raise labor-law issues for non-supervisory employees.]
 
 6. You are expected to cooperate fully and give truthful, complete answers.
 

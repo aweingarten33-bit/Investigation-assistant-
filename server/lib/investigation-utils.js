@@ -1,4 +1,11 @@
 import { createHash } from "node:crypto";
+import {
+  appendSummaryQualifier,
+  extractUnsuppliedTerms,
+  findingProvenance,
+  qualifyDocumentaryClaims,
+  resolveProvenance,
+} from "./provenance.js";
 
 // 20,000 was tight for a real pasted organization policy document (the
 // investigation-process policy alone can run 15-16K characters) plus the
@@ -115,10 +122,20 @@ export function deriveClosureAssessment(classification) {
   };
 }
 
+// Evidence that is the investigator's own summary is one source no matter how
+// many records it describes; it never counts as independent corroboration.
+const SUMMARY_SOURCE_KEY = "__investigator_summary__";
+function sourceKey(item) {
+  return item.provenance === "investigator_summary" ? SUMMARY_SOURCE_KEY : item.sourceLabel;
+}
+
 export function hydrateEvidenceTraceability(classification, reportText) {
   const lines = splitReportLines(reportText);
   const maxLine = lines.length;
   const seenIds = new Set();
+  // Records the notes themselves say were not supplied (e.g. "original roster
+  // not supplied, investigator summary only").
+  const unsuppliedTerms = extractUnsuppliedTerms(lines);
 
   // Never "repair" an AI citation by clamping an impossible line number to a
   // real line. An out-of-range citation is discarded so the dependent finding
@@ -135,8 +152,11 @@ export function hydrateEvidenceTraceability(classification, reportText) {
       const end = Number(item.lineEnd);
       const sourceLabel = verifiedSourceLabel(lines, item, start, end);
       const excerpt = lines.slice(start - 1, end).join("\n").trim();
+      const { provenance, provenanceNote } = resolveProvenance(item, excerpt, unsuppliedTerms);
       return {
         ...item,
+        provenance,
+        provenanceNote,
         lineStart: start,
         lineEnd: end,
         sourceLabel,
@@ -146,16 +166,46 @@ export function hydrateEvidenceTraceability(classification, reportText) {
     });
 
   const validEvidenceIds = new Set(evidenceItems.map((item) => item.id));
-  const sourceLabelById = new Map(evidenceItems.map((item) => [item.id, item.sourceLabel]));
+  const evidenceById = new Map(evidenceItems.map((item) => [item.id, item]));
+  const caseHasOriginalRecord = evidenceItems.some((item) => item.provenance === "original_record");
+  const caseClaimOptions = { terms: unsuppliedTerms, noOriginalRecords: !caseHasOriginalRecord };
   const findings = (classification.findings || []).map((finding, index) => {
     const supportingEvidenceIds = (finding.supportingEvidenceIds || []).filter((id) => validEvidenceIds.has(id));
-    const contradictingEvidenceIds = (finding.contradictingEvidenceIds || []).filter((id) => validEvidenceIds.has(id));
+    const citedContradicting = (finding.contradictingEvidenceIds || []).filter((id) => validEvidenceIds.has(id));
+
+    // A contradiction is two DIFFERENT sources giving conflicting accounts of
+    // the same factual point, named in a conflicts entry pairing one
+    // supporting and one contradicting item. Anything else the model marked
+    // "contradicting" (e.g. a subject denying motive for an act they admit)
+    // is kept only as related context and does not mark the finding
+    // contradicted.
+    const conflicts = (finding.conflicts || []).filter((conflict) => {
+      const supporting = evidenceById.get(conflict.supportingEvidenceId);
+      const contradicting = evidenceById.get(conflict.contradictingEvidenceId);
+      return Boolean(String(conflict.point || "").trim())
+        && supporting && contradicting
+        && supportingEvidenceIds.includes(supporting.id)
+        && citedContradicting.includes(contradicting.id)
+        && sourceKey(supporting) !== sourceKey(contradicting);
+    });
+    const pairedIds = new Set(conflicts.map((conflict) => conflict.contradictingEvidenceId));
+    const contradictingEvidenceIds = citedContradicting.filter((id) => pairedIds.has(id));
+    const contextEvidenceIds = [...new Set([
+      ...(finding.contextEvidenceIds || []).filter((id) => validEvidenceIds.has(id)),
+      ...citedContradicting.filter((id) => !pairedIds.has(id)),
+    ])].filter((id) => !supportingEvidenceIds.includes(id) && !contradictingEvidenceIds.includes(id));
 
     // "Corroborated" requires two independent SOURCES, not merely two cited
     // evidence IDs. Two excerpts that both happen to carry the same
     // sourceLabel (e.g. two lines from the same person's own statement) are
-    // still a single source and must not silently read as corroborated.
-    const distinctSupportingSources = new Set(supportingEvidenceIds.map((id) => sourceLabelById.get(id)));
+    // still a single source, and investigator summaries never count as an
+    // independent source.
+    const distinctSupportingSources = new Set(
+      supportingEvidenceIds
+        .map((id) => evidenceById.get(id))
+        .filter((item) => item.provenance !== "investigator_summary")
+        .map((item) => item.sourceLabel),
+    );
 
     let evidenceStatus;
     if (supportingEvidenceIds.length === 0 && contradictingEvidenceIds.length === 0) evidenceStatus = "insufficient";
@@ -163,11 +213,22 @@ export function hydrateEvidenceTraceability(classification, reportText) {
     else if (distinctSupportingSources.size >= 2) evidenceStatus = "corroborated";
     else evidenceStatus = "single_source";
 
+    // Findings resting on an investigator summary say so, and never claim the
+    // unsupplied record was reviewed or gave documentary corroboration.
+    const { reliesOnSummary, hasOriginalRecord } = findingProvenance({ supportingEvidenceIds }, evidenceById);
+    const claimOptions = { terms: unsuppliedTerms, noOriginalRecords: !hasOriginalRecord };
+    let statement = qualifyDocumentaryClaims(finding.statement, claimOptions);
+    if (reliesOnSummary && !hasOriginalRecord) statement = appendSummaryQualifier(statement);
+
     return {
       ...finding,
       id: finding.id || `F${index + 1}`,
+      statement,
+      inference: qualifyDocumentaryClaims(finding.inference, claimOptions),
       supportingEvidenceIds,
       contradictingEvidenceIds,
+      conflicts,
+      contextEvidenceIds,
       evidenceStatus,
     };
   });
@@ -197,6 +258,7 @@ export function hydrateEvidenceTraceability(classification, reportText) {
     return {
       ...hypothesis,
       id,
+      description: qualifyDocumentaryClaims(hypothesis.description, caseClaimOptions),
       supportingEvidenceIds,
       contradictingEvidenceIds,
       state,
@@ -231,7 +293,15 @@ export function hydrateEvidenceTraceability(classification, reportText) {
     return { ...check, evidenceIds };
   });
 
-  const hydrated = { ...classification, evidenceItems, findings, hypotheses, disciplineFactors, sufficiencyChecks };
+  const hydrated = {
+    ...classification,
+    closureRationale: qualifyDocumentaryClaims(classification.closureRationale, caseClaimOptions),
+    evidenceItems,
+    findings,
+    hypotheses,
+    disciplineFactors,
+    sufficiencyChecks: sufficiencyChecks.map((check) => ({ ...check, rationale: qualifyDocumentaryClaims(check.rationale, caseClaimOptions) })),
+  };
   return { ...hydrated, closureAssessment: deriveClosureAssessment(hydrated) };
 }
 

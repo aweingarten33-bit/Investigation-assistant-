@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { callApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Disclaimer } from "@/components/Disclaimer";
 import { OrganizationDisciplineMatrix } from "@/components/OrganizationDisciplineMatrix";
 import { exportToDocx } from "@/lib/docx-export";
 import { extractDocxText, extractPdfText } from "@/lib/file-text";
+import { useSessionState } from "@/lib/session-state";
 import { AnalysisResult, HumanReviewRecord } from "@/lib/types";
 import {
   buildOrganizationContext,
@@ -35,20 +36,29 @@ const ANALYSIS_VERSION = "investigation-assistant-personal-v3";
 
 const Index = () => {
   const navigate = useNavigate();
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [fileSize, setFileSize] = useState<string | null>(null);
-  const [reportText, setReportText] = useState<string>("");
-  const [organizationConfig, setOrganizationConfig] = useState<OrganizationDisciplineConfig>({ ...EMPTY_ORGANIZATION_DISCIPLINE_CONFIG });
-  const [showOrgContext, setShowOrgContext] = useState(false);
-  const [isSample, setIsSample] = useState(false);
+  // Session state survives navigating to the Toolkit and back (see
+  // src/lib/session-state.ts); in-progress analysis state below does not.
+  const [fileName, setFileName] = useSessionState<string | null>("index.fileName", null);
+  const [fileSize, setFileSize] = useSessionState<string | null>("index.fileSize", null);
+  const [reportText, setReportText] = useSessionState<string>("index.reportText", "");
+  const [organizationConfig, setOrganizationConfig] = useSessionState<OrganizationDisciplineConfig>("index.organizationConfig", () => ({ ...EMPTY_ORGANIZATION_DISCIPLINE_CONFIG }));
+  const [showOrgContext, setShowOrgContext] = useSessionState("index.showOrgContext", false);
+  const [isSample, setIsSample] = useSessionState("index.isSample", false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeStep, setAnalyzeStep] = useState<0 | 1 | 2>(0);
   const [classifyStartedAt, setClassifyStartedAt] = useState<number | null>(null);
   const [reportStartedAt, setReportStartedAt] = useState<number | null>(null);
   const [classifySummary, setClassifySummary] = useState<ClassifySummary | null>(null);
-  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [result, setResult] = useSessionState<AnalysisResult | null>("index.result", null);
   const runIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Leaving the page mid-analysis cancels the run (its result would have
+  // nowhere to land); the notes themselves are kept.
+  useEffect(() => () => {
+    runIdRef.current++;
+    abortRef.current?.abort();
+  }, []);
 
   const organizationContext = useMemo(() => buildOrganizationContext(organizationConfig), [organizationConfig]);
 
@@ -75,7 +85,7 @@ const Index = () => {
     setResult(null);
     setIsAnalyzing(false);
     setAnalyzeStep(0);
-  }, [invalidateRun]);
+  }, [invalidateRun, setFileName, setFileSize, setIsSample, setOrganizationConfig, setReportText, setResult, setShowOrgContext]);
 
   const handleFileSelect = useCallback(async (files: File[]) => {
     const selected = files.slice(0, MAX_UPLOAD_FILES);
@@ -143,7 +153,7 @@ const Index = () => {
     } catch {
       toast.error("Failed to extract text from one or more DOCX/PDF source files.");
     }
-  }, []);
+  }, [setFileName, setFileSize, setIsSample, setReportText, setResult]);
 
   const handleTextChange = useCallback((text: string) => {
     setReportText(text);
@@ -151,7 +161,7 @@ const Index = () => {
     setFileSize(null);
     setIsSample(false);
     setResult(null);
-  }, []);
+  }, [setFileName, setFileSize, setIsSample, setReportText, setResult]);
 
   const handleUseSample = useCallback(() => {
     setReportText(SAMPLE_REPORT_TEXT);
@@ -159,7 +169,7 @@ const Index = () => {
     setFileSize(null);
     setIsSample(true);
     setResult(null);
-  }, []);
+  }, [setFileName, setFileSize, setIsSample, setReportText, setResult]);
 
   const handleCancel = useCallback(() => {
     invalidateRun();
@@ -274,11 +284,11 @@ const Index = () => {
         setAnalyzeStep(0);
       }
     }
-  }, [reportText, organizationContext]);
+  }, [reportText, organizationContext, setResult]);
 
   const handleHumanReviewChange = useCallback((review: HumanReviewRecord | undefined) => {
     setResult((current) => current ? { ...current, humanReview: review } : current);
-  }, []);
+  }, [setResult]);
 
   const handleExport = useCallback(async () => {
     if (!result) return;
@@ -302,6 +312,24 @@ const Index = () => {
 
   const hasContent = reportText.trim().length > 0;
 
+  // In-app navigation keeps this work; a reload or closed tab does not, so
+  // the browser asks first.
+  const hasUnsavedWork = hasContent || result !== null;
+  useEffect(() => {
+    if (!hasUnsavedWork) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [hasUnsavedWork]);
+
+  const handleNewAnalysis = useCallback(() => {
+    if (result && !window.confirm("Start a new analysis? This clears the current notes, report and plan. Export to Word first if you need to keep them.")) return;
+    handleReset();
+  }, [result, handleReset]);
+
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-[720px] lg:max-w-[880px] xl:max-w-[1040px] px-4 py-3 sm:py-10">
@@ -311,7 +339,7 @@ const Index = () => {
               <div className="flex items-center justify-start mb-2"><HomeToolkitMenuButton /></div>
               <div className="flex gap-3">
                 <Button onClick={handleExport} className="flex-1 h-11 text-sm font-semibold"><Download className="mr-2 h-4 w-4" />Export to Word</Button>
-                <Button onClick={handleReset} variant="outline" className="h-11 text-sm">New Analysis</Button>
+                <Button onClick={handleNewAnalysis} variant="outline" className="h-11 text-sm">New Analysis</Button>
               </div>
               {result.decision !== "needs_more_info" && (
                 <button onClick={handleDraftLetter} className="mt-2 w-full flex items-center justify-center gap-1.5 h-9 text-xs font-medium text-primary hover:text-primary/80 transition-colors rounded-lg border border-primary/20 bg-primary/5 hover:bg-primary/10">

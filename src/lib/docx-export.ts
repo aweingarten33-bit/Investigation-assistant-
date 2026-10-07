@@ -130,9 +130,21 @@ export function buildReportDocument(result: AnalysisResult): Document {
           if (evidence) {
             children.push(bullet(`${evidence.id} — ${evidence.reference}: ${evidence.summary}`));
             if (evidence.excerpt) children.push(quoteParagraph(evidence.excerpt));
+            if (evidence.provenance === "investigator_summary") children.push(paragraph(`Per investigator summary${evidence.provenanceNote ? ` — ${evidence.provenanceNote}` : ""}`));
           }
         });
       }
+
+      (finding.conflicts ?? []).forEach((conflict) => {
+        const a = evidenceById.get(conflict.supportingEvidenceId);
+        const b = evidenceById.get(conflict.contradictingEvidenceId);
+        if (!a || !b) return;
+        children.push(paragraph(`Conflict: ${conflict.point}`));
+        children.push(bullet(`${a.reference}:`));
+        children.push(quoteParagraph(a.excerpt || a.summary));
+        children.push(bullet(`${b.reference}:`));
+        children.push(quoteParagraph(b.excerpt || b.summary));
+      });
 
       if (finding.contradictingEvidenceIds.length > 0) {
         children.push(paragraph("Contradicting evidence:"));
@@ -144,11 +156,19 @@ export function buildReportDocument(result: AnalysisResult): Document {
           }
         });
       }
+      const related = (finding.contextEvidenceIds ?? []).map((id) => evidenceById.get(id)).filter(Boolean);
+      if (related.length > 0) {
+        children.push(paragraph("Related statements (not a factual conflict):"));
+        related.forEach((evidence) => {
+          children.push(bullet(`${evidence!.id} — ${evidence!.reference}: ${evidence!.summary}`));
+          if (evidence!.excerpt) children.push(quoteParagraph(evidence!.excerpt));
+        });
+      }
       children.push(spacer());
     });
 
     const evidenceIdsInFindings = new Set(
-      result.findings.flatMap((finding) => [...finding.supportingEvidenceIds, ...finding.contradictingEvidenceIds]),
+      result.findings.flatMap((finding) => [...finding.supportingEvidenceIds, ...finding.contradictingEvidenceIds, ...(finding.contextEvidenceIds ?? [])]),
     );
     const unlinkedEvidence = result.evidenceItems.filter((item) => !evidenceIdsInFindings.has(item.id));
     if (unlinkedEvidence.length > 0) {

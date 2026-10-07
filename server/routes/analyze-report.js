@@ -2,6 +2,7 @@ import express from "express";
 import { randomBytes, timingSafeEqual as cryptoTimingSafeEqual } from "node:crypto";
 import { z, ZodError } from "zod";
 import { callStructured, callTextWithSearch } from "../lib/ai.js";
+import { publicErrorMessage } from "../lib/errors.js";
 import { createRateLimiter, clientIp } from "../lib/rate-limit.js";
 import {
   buildInputHash,
@@ -12,6 +13,7 @@ import {
   numberReportLines,
 } from "../lib/investigation-utils.js";
 import { RESEARCH_CATEGORIES, topicForCategory } from "../lib/research-taxonomy.js";
+import { PROVENANCE_TYPES, enforceReportProvenance } from "../lib/provenance.js";
 
 const MAX_REPORT_TEXT_LENGTH = 100_000;
 // The step="report" request echoes the full classification (evidenceItems,
@@ -65,10 +67,21 @@ const evidenceItemSchema = {
     lineStart: { type: "integer" },
     lineEnd: { type: "integer" },
     evidenceType: { type: "string", enum: EVIDENCE_TYPES },
+    provenance: { type: "string", enum: PROVENANCE_TYPES },
     stance: { type: "string", enum: EVIDENCE_STANCES },
     summary: { type: "string" },
   },
-  required: ["id", "sourceLabel", "lineStart", "lineEnd", "evidenceType", "stance", "summary"],
+  required: ["id", "sourceLabel", "lineStart", "lineEnd", "evidenceType", "provenance", "stance", "summary"],
+};
+
+const findingConflictSchema = {
+  type: "object",
+  properties: {
+    point: { type: "string" },
+    supportingEvidenceId: { type: "string" },
+    contradictingEvidenceId: { type: "string" },
+  },
+  required: ["point", "supportingEvidenceId", "contradictingEvidenceId"],
 };
 
 const findingSchema = {
@@ -80,8 +93,9 @@ const findingSchema = {
     evidenceStatus: { type: "string", enum: EVIDENCE_STATUSES },
     supportingEvidenceIds: { type: "array", items: { type: "string" } },
     contradictingEvidenceIds: { type: "array", items: { type: "string" } },
+    conflicts: { type: "array", items: findingConflictSchema },
   },
-  required: ["id", "statement", "inference", "evidenceStatus", "supportingEvidenceIds", "contradictingEvidenceIds"],
+  required: ["id", "statement", "inference", "evidenceStatus", "supportingEvidenceIds", "contradictingEvidenceIds", "conflicts"],
 };
 
 const hypothesisSchema = {
@@ -211,8 +225,16 @@ export const EvidenceZ = z.object({
   lineStart: z.number().int().positive(),
   lineEnd: z.number().int().positive(),
   evidenceType: z.enum(EVIDENCE_TYPES),
+  // Missing/invalid falls back to "other"; the server then applies the notes'
+  // own "not supplied" statements (see server/lib/provenance.js).
+  provenance: z.enum(PROVENANCE_TYPES).catch("other"),
   stance: z.enum(EVIDENCE_STANCES),
   summary: z.string().min(1).max(1000),
+});
+export const FindingConflictZ = z.object({
+  point: z.string().min(1).max(500),
+  supportingEvidenceId: z.string().max(80),
+  contradictingEvidenceId: z.string().max(80),
 });
 // ID-reference lists below all use .catch([]): a model omitting or
 // null-ing one of these is common and always safe to treat as "none cited"
@@ -222,16 +244,23 @@ export const EvidenceZ = z.object({
 // should surface as an error rather than vanish silently.
 export const FindingZ = z.object({
   id: z.string().min(1).max(80),
-  statement: z.string().min(1).max(2000),
-  inference: z.string().max(2000),
+  // Headroom above the model's ~2000 chars: hydration may add a "per
+  // investigator summary" qualifier, and the signed classification is
+  // re-validated on the report step.
+  statement: z.string().min(1).max(2400),
+  inference: z.string().max(2400),
   evidenceStatus: z.enum(EVIDENCE_STATUSES),
   supportingEvidenceIds: z.array(z.string().max(80)).max(50).catch([]),
   contradictingEvidenceIds: z.array(z.string().max(80)).max(50).catch([]),
+  conflicts: z.array(FindingConflictZ).max(20).catch([]),
+  // Server-derived (hydration moves unpaired "contradicting" evidence here).
+  // Kept in the schema so the signed classification round-trips unchanged.
+  contextEvidenceIds: z.array(z.string().max(80)).max(50).catch([]),
 });
 export const HypothesisZ = z.object({
   id: z.string().min(1).max(80),
   label: z.string().min(1).max(200),
-  description: z.string().min(1).max(2000),
+  description: z.string().min(1).max(2400),
   state: z.enum(HYPOTHESIS_STATES),
   supportingEvidenceIds: z.array(z.string().max(80)).max(50).catch([]),
   contradictingEvidenceIds: z.array(z.string().max(80)).max(50).catch([]),
@@ -284,7 +313,7 @@ export const ClassificationZ = z.object({
   // a conservative, closure-blocking placeholder for any check the model
   // dropped, so this is strictly safer than the old hard-fail, not looser.
   sufficiencyChecks: z.array(z.unknown()).catch([]),
-  closureRationale: z.string().min(1).max(3000),
+  closureRationale: z.string().min(1).max(3600),
   whatWouldChangeConclusion: z.array(ConclusionChangeFactorZ).max(12).catch([]),
   disciplineFactors: z.array(DisciplineFactorZ).max(30),
   disciplineRange: z.object({
@@ -317,7 +346,7 @@ export function normalizeSufficiencyChecks(rawChecks) {
       material: typeof raw.material === "boolean" ? raw.material : true,
       resolvable: typeof raw.resolvable === "boolean" ? raw.resolvable : true,
       rationale: typeof raw.rationale === "string" && raw.rationale.trim()
-        ? raw.rationale.slice(0, 2000)
+        ? raw.rationale.slice(0, 2400)
         : "The AI did not return a usable rationale for this check.",
       nextAction: typeof raw.nextAction === "string" ? raw.nextAction.slice(0, 1500) : "",
       evidenceIds: Array.isArray(raw.evidenceIds) ? raw.evidenceIds.filter((id) => typeof id === "string").slice(0, 50) : [],
@@ -402,6 +431,18 @@ ABSOLUTE EVIDENCE RULES:
 - The case notes arrive with immutable line labels like [L0001]. Every case-specific factual claim must trace to those lines.
 - Create evidenceItems only for actual information in those notes. Cite lineStart/lineEnd; never invent a source, interview, audit, policy, date, witness, or record.
 - A finding must reference evidence item IDs. Record contradictory evidence instead of hiding it.
+
+PROVENANCE RULES (original evidence vs. investigator summary):
+- Label every evidence item's provenance: original_record = the record itself (or a verbatim extract of it) is in the notes; investigator_summary = the investigator's own description of a record, or anything the notes say was not supplied/provided/attached or is "summary only"; statement = what a witness, reporter, or the subject said; other = anything else.
+- If the notes say a record was not supplied (e.g. "original roster not supplied, investigator summary only"), every evidence item about that record is investigator_summary, even if it is described in detail.
+- Never write that a record was reviewed, confirmed, verified, or provides documentary corroboration unless the record itself is original_record evidence in the notes. Write "per investigator summary" instead, and say the underlying record was not supplied.
+- An investigator summary is not an independent source and cannot by itself corroborate a finding.
+
+CONTRADICTION RULES:
+- contradictingEvidenceIds is ONLY for evidence from a different source that gives a conflicting account of the same factual point the finding states (e.g. two sources disagree about whether, when, or how an act happened).
+- A denial of intent, motive, knowledge, or wrongdoing is NOT a contradiction of an act the same person admits or that other evidence establishes. Record that denial as context (stance=context) or against an intent/motive finding or hypothesis, not as contradicting the act.
+- A source cannot contradict itself for this purpose; inconsistencies within one person's own account belong in material_inconsistencies.
+- For every contradiction, add a conflicts entry: point = the specific fact in dispute, supportingEvidenceId = the evidence for the finding's version, contradictingEvidenceId = the evidence for the conflicting version. Contradicting evidence without a conflicts entry is not treated as a contradiction.
 - If the evidence is sparse, conflicting, or lacks who/what/evidence needed to support the allegation, use NEEDS_MORE_INFO.
 - UNSUBSTANTIATED means the available evidence does not support the allegation or affirmatively supports a contrary conclusion. Do not treat lack of proof as proof the reporter lied.
 - Regulatory research and organization-specific rules are CONTEXT, never case facts.
@@ -488,12 +529,22 @@ ${JSON.stringify({
   riskLevel: classification.riskLevel,
   violationType: classification.violationType,
   findings: classification.findings,
+  evidenceProvenance: (classification.evidenceItems || []).map((item) => ({
+    id: item.id,
+    provenance: item.provenance,
+    note: item.provenanceNote || undefined,
+  })),
   hypotheses: classification.hypotheses,
   sufficiencyChecks: classification.sufficiencyChecks,
   closureAssessment: classification.closureAssessment,
   disciplineRange: classification.disciplineRange,
   policyQuestions: classification.policyQuestions,
 }, null, 2)}
+
+PROVENANCE LANGUAGE:
+- evidenceProvenance says whether each evidence item is an original_record, an investigator_summary, a statement, or other.
+- Never say a record was reviewed, confirmed something, or provides documentary corroboration unless that record is original_record evidence. When a fact rests on an investigator_summary, write "per investigator summary" and say the underlying record was not supplied.
+- Keep a finding's evidence status as given. Do not call a finding "contradicted" or "corroborated" in the prose unless its evidenceStatus says so.
 
 INVESTIGATION SUFFICIENCY LANGUAGE:
 - The server-derived closureAssessment is authoritative for whether the investigation is presently sufficient to close.
@@ -648,10 +699,11 @@ router.post("/", async (req, res) => {
         ReportZ,
         8192,
       );
-      const investigationFindings = groundReportFindings(report.investigationFindings, classification);
+      const checkedReport = enforceReportProvenance(report, classification, reportText);
+      const investigationFindings = groundReportFindings(checkedReport.investigationFindings, classification);
       return res.json({
         ...classification,
-        ...report,
+        ...checkedReport,
         investigationFindings,
         missingInfo: report.missingInfo.length > 0 ? report.missingInfo : null,
       });
@@ -667,7 +719,7 @@ router.post("/", async (req, res) => {
       console.error("Zod validation failure detail:", JSON.stringify(error.issues, null, 2));
       return res.status(502).json({ error: "AI returned an invalid structured response. Please try again." });
     }
-    res.status(error.status || 500).json({ error: error.message || "Analysis failed" });
+    res.status(error.status || 500).json({ error: publicErrorMessage(error) });
   }
 });
 

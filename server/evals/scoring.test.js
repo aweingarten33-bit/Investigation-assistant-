@@ -66,6 +66,30 @@ describe("investigation evaluation scorer", () => {
     expect(result.checks.find((check) => check.name === "no-automatic-discipline")?.passed).toBe(false);
   });
 
+  it("fails a record labelled original when the notes say it was not supplied, and a false contradiction", () => {
+    const evalCase = { ...baseCase, expectations: { requireInvestigatorSummaryProvenance: true, forbidContradictedFindings: true } };
+    const bad = scoreInvestigationResult(evalCase, {
+      classification: {
+        ...goodResponse.classification,
+        evidenceItems: [{ id: "E1", lineStart: 1, lineEnd: 1, stance: "supports", provenance: "original_record" }],
+        findings: [{ id: "F1", statement: "Chart opened.", evidenceStatus: "contradicted", supportingEvidenceIds: ["E1"], contradictingEvidenceIds: [] }],
+      },
+      researchTopic: goodResponse.researchTopic,
+    });
+    expect(bad.criticalFailures.join(" ")).toMatch(/summary-provenance/);
+    expect(bad.criticalFailures.join(" ")).toMatch(/no-false-contradiction/);
+
+    const good = scoreInvestigationResult(evalCase, {
+      classification: {
+        ...goodResponse.classification,
+        evidenceItems: [{ id: "E1", lineStart: 1, lineEnd: 1, stance: "supports", provenance: "investigator_summary" }],
+        findings: [{ id: "F1", statement: "Chart opened.", evidenceStatus: "single_source", supportingEvidenceIds: ["E1"], contradictingEvidenceIds: [] }],
+      },
+      researchTopic: goodResponse.researchTopic,
+    });
+    expect(good.criticalFailures).toEqual([]);
+  });
+
   it("summarizes suite-level pass/fail state", () => {
     const good = scoreInvestigationResult(baseCase, goodResponse);
     const bad = { ...good, passed: false, percent: 50 };

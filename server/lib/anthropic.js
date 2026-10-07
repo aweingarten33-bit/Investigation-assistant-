@@ -77,8 +77,19 @@ export async function callStructured(systemPrompt, userMessage, schema, toolName
   return toolUse.input;
 }
 
+// Anthropic supports web search on any configured model.
+export function supportsWebSearch() {
+  return true;
+}
+
 // Free-text output — used by the letter generator and case analysis tools.
 export async function callText(systemPrompt, userMessage) {
+  return (await callTextDetailed(systemPrompt, userMessage)).text;
+}
+
+// Same as callText, but also reports whether the output hit the token limit,
+// so callers can refuse to present a cut-off document as complete.
+export async function callTextDetailed(systemPrompt, userMessage, { maxTokens = 2048 } = {}) {
   const response = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -88,7 +99,7 @@ export async function callText(systemPrompt, userMessage) {
     },
     body: JSON.stringify({
       model: model(),
-      max_tokens: 2048,
+      max_tokens: maxTokens,
       system: systemPrompt,
       messages: [{ role: "user", content: userMessage }],
     }),
@@ -106,7 +117,9 @@ export async function callText(systemPrompt, userMessage) {
     console.error("No text block in response:", JSON.stringify(data));
     throw new Error("No response from AI");
   }
-  return block.text;
+  const truncated = data.stop_reason === "max_tokens";
+  if (truncated) console.error(`Anthropic text response was truncated: stop_reason=max_tokens at max_tokens=${maxTokens}.`);
+  return { text: block.text, truncated };
 }
 
 // Free-text output grounded in live web search — used to pull current

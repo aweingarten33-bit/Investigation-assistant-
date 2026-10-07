@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Sparkles, FileText, Copy, Check, Loader2, ChevronDown } from "lucide-react";
+import { Sparkles, FileText, Copy, Check, Loader2, ChevronDown, AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -32,6 +32,10 @@ export default function AILetterGenerator({ initialLetterType, initialCaseDetail
   const [letterType, setLetterType] = useState(initialLetterType ?? "");
   const [caseDetails, setCaseDetails] = useState(initialCaseDetails ?? "");
   const [result, setResult] = useState("");
+  // True when the provider stopped at its output limit: the letter is
+  // incomplete, so it must not be copied as if it were finished.
+  const [truncated, setTruncated] = useState(false);
+  const [usedExtendedLength, setUsedExtendedLength] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showTypeSelector, setShowTypeSelector] = useState(false);
@@ -45,7 +49,7 @@ export default function AILetterGenerator({ initialLetterType, initialCaseDetail
 
   const selectedType = LETTER_TYPES.find(t => t.value === letterType);
 
-  const generate = async () => {
+  const generate = async (extendedLength = false) => {
     if (!letterType || !caseDetails.trim()) {
       toast.error("Select a letter type and enter case details");
       return;
@@ -56,11 +60,19 @@ export default function AILetterGenerator({ initialLetterType, initialCaseDetail
     }
     setIsGenerating(true);
     setResult("");
+    setTruncated(false);
+    setUsedExtendedLength(extendedLength);
 
     try {
-      const { data, error } = await callApi<{ text: string }>("investigation-toolkit", { mode: "generate_letter", letterType, caseDetails: caseDetails.trim() });
+      const { data, error } = await callApi<{ text: string; truncated?: boolean }>("investigation-toolkit", {
+        mode: "generate_letter",
+        letterType,
+        caseDetails: caseDetails.trim(),
+        extendedLength,
+      });
       if (error) throw error;
       setResult(data!.text);
+      setTruncated(data!.truncated === true);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to generate letter");
     } finally {
@@ -69,6 +81,7 @@ export default function AILetterGenerator({ initialLetterType, initialCaseDetail
   };
 
   const handleCopy = () => {
+    if (truncated) return;
     navigator.clipboard.writeText(result);
     setCopied(true);
     toast.success("Letter copied to clipboard");
@@ -145,7 +158,7 @@ export default function AILetterGenerator({ initialLetterType, initialCaseDetail
         className="min-h-[120px] text-sm"
       />
 
-      <Button onClick={generate} disabled={isGenerating || !letterType || !caseDetails.trim()} className="w-full sm:w-auto">
+      <Button onClick={() => generate()} disabled={isGenerating || !letterType || !caseDetails.trim()} className="w-full sm:w-auto">
         {isGenerating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
         {isGenerating ? "Generating…" : "Generate Letter"}
       </Button>
@@ -154,11 +167,27 @@ export default function AILetterGenerator({ initialLetterType, initialCaseDetail
         <div className="relative border border-border rounded-lg bg-muted/30">
           <div className="flex items-center justify-between px-4 py-2 border-b border-border">
             <p className="text-xs font-semibold text-foreground">Generated Letter</p>
-            <Button variant="ghost" size="sm" onClick={handleCopy} disabled={!result} className="h-7 text-xs">
+            <Button variant="ghost" size="sm" onClick={handleCopy} disabled={!result || truncated} className="h-7 text-xs">
               {copied ? <Check className="w-3 h-3 mr-1" /> : <Copy className="w-3 h-3 mr-1" />}
               {copied ? "Copied" : "Copy"}
             </Button>
           </div>
+          {truncated && (
+            <div role="alert" className="mx-4 mt-3 rounded-md border border-warning/40 bg-warning/10 p-3 flex gap-2">
+              <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-2">
+                <p className="text-xs text-foreground leading-relaxed">
+                  <strong>This letter was cut short</strong> — the AI hit its length limit before finishing, so the text below is incomplete. Copy is disabled until you have a complete letter.
+                  {usedExtendedLength && " It was cut short even with the longer limit; shorten the case details and try again."}
+                </p>
+                {!usedExtendedLength && (
+                  <Button type="button" variant="outline" size="sm" onClick={() => generate(true)} disabled={isGenerating} className="h-7 text-xs">
+                    <RefreshCw className="w-3 h-3 mr-1" />Regenerate with a longer limit
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
           <div className="px-4 py-3 prose prose-sm dark:prose-invert max-w-none text-sm max-h-[400px] overflow-y-auto">
             {result ? <ReactMarkdown>{result}</ReactMarkdown> : (
               <div className="flex items-center gap-2 text-muted-foreground text-xs">

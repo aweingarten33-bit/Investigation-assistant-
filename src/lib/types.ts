@@ -9,6 +9,10 @@ export type HumanReviewStatus = "approved" | "approved_with_changes" | "needs_mo
 export type HypothesisState = "supported" | "partially_supported" | "weakened" | "unresolved" | "contradicted";
 export type SufficiencyCheckStatus = "satisfied" | "unresolved" | "not_applicable";
 export type ClosureStatus = "ready_to_close" | "not_ready_to_close" | "ready_with_unresolved_limitations";
+// original_record = the record itself is in the notes; investigator_summary =
+// the investigator's description of a record (or one the notes say was not
+// supplied); statement = what a person said.
+export type EvidenceProvenance = "original_record" | "investigator_summary" | "statement" | "other";
 
 export interface Source {
   url: string;
@@ -21,10 +25,19 @@ export interface EvidenceItem {
   lineStart: number;
   lineEnd: number;
   evidenceType: EvidenceType;
+  provenance?: EvidenceProvenance;
+  provenanceNote?: string;
   stance: EvidenceStance;
   summary: string;
   reference: string;
   excerpt: string;
+}
+
+// Two different sources disagreeing on the same factual point.
+export interface FindingConflict {
+  point: string;
+  supportingEvidenceId: string;
+  contradictingEvidenceId: string;
 }
 
 export interface TraceableFinding {
@@ -34,6 +47,10 @@ export interface TraceableFinding {
   evidenceStatus: EvidenceStatus;
   supportingEvidenceIds: string[];
   contradictingEvidenceIds: string[];
+  conflicts?: FindingConflict[];
+  // Related evidence the model called contradicting that does not dispute the
+  // finding's facts (e.g. a denial of motive for an admitted act).
+  contextEvidenceIds?: string[];
 }
 
 export interface InvestigationHypothesis {

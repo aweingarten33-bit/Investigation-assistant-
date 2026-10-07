@@ -72,11 +72,23 @@ export async function callStructured(systemPrompt, userMessage, schema, toolName
   return call.args;
 }
 
+// Gemini supports Google Search grounding on any configured model.
+export function supportsWebSearch() {
+  return true;
+}
+
 // Free-text output.
 export async function callText(systemPrompt, userMessage) {
+  return (await callTextDetailed(systemPrompt, userMessage)).text;
+}
+
+// Same as callText, but also reports whether the output hit the token limit.
+// Without maxTokens, Gemini's own default output limit applies (as before).
+export async function callTextDetailed(systemPrompt, userMessage, { maxTokens } = {}) {
   const data = await generateContent({
     systemInstruction: { parts: [{ text: systemPrompt }] },
     contents: [{ role: "user", parts: [{ text: userMessage }] }],
+    ...(maxTokens ? { generationConfig: { maxOutputTokens: maxTokens } } : {}),
   });
 
   const parts = data.candidates?.[0]?.content?.parts ?? [];
@@ -85,7 +97,7 @@ export async function callText(systemPrompt, userMessage) {
     console.error("No text in response:", JSON.stringify(data));
     throw new Error("No response from AI");
   }
-  return text;
+  return { text, truncated: data.candidates?.[0]?.finishReason === "MAX_TOKENS" };
 }
 
 // Free-text output grounded in live Google Search — used to pull current

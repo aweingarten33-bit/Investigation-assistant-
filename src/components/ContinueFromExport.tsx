@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef } from "react";
 import { AlertTriangle, CheckCircle2, FileUp, History, Paperclip, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NextStepsPlanner } from "@/components/InvestigatorNextSteps";
 import { extractDocxText, extractPdfText } from "@/lib/file-text";
 import { buildPlannerInputFromExport, parseExportText, type ParsedExport } from "@/lib/export-parser";
+import { useSessionState } from "@/lib/session-state";
 
 // Mirrors the planner route's limits (server/routes/investigation-toolkit.js).
 const MAX_PLAN_CASE_LENGTH = 100_000;
@@ -19,13 +20,14 @@ async function readNotesFile(file: File): Promise<string> {
 }
 
 export function ContinueFromExport() {
-  const [open, setOpen] = useState(false);
-  const [exportName, setExportName] = useState<string | null>(null);
-  const [exportText, setExportText] = useState("");
-  const [parsed, setParsed] = useState<ParsedExport | null>(null);
-  const [originalNotes, setOriginalNotes] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [uploadCount, setUploadCount] = useState(0);
+  // Kept across in-app navigation (src/lib/session-state.ts).
+  const [open, setOpen] = useSessionState("continue.open", false);
+  const [exportName, setExportName] = useSessionState<string | null>("continue.exportName", null);
+  const [exportText, setExportText] = useSessionState("continue.exportText", "");
+  const [parsed, setParsed] = useSessionState<ParsedExport | null>("continue.parsed", null);
+  const [originalNotes, setOriginalNotes] = useSessionState("continue.originalNotes", "");
+  const [error, setError] = useSessionState<string | null>("continue.error", null);
+  const [uploadCount, setUploadCount] = useSessionState("continue.uploadCount", 0);
   const exportInputRef = useRef<HTMLInputElement>(null);
   const notesInputRef = useRef<HTMLInputElement>(null);
 

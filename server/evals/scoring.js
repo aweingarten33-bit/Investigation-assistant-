@@ -128,6 +128,30 @@ export function scoreInvestigationResult(evalCase, apiResponse) {
     true,
   );
 
+  if (expectations.requireInvestigatorSummaryProvenance) {
+    const labelled = evidenceItems.some((item) => item?.provenance === "investigator_summary");
+    add(
+      "summary-provenance",
+      labelled,
+      5,
+      "A record the notes say was not supplied must be labelled as an investigator summary, not an original record.",
+      true,
+    );
+  }
+
+  if (expectations.forbidContradictedFindings) {
+    const contradicted = (classification?.findings ?? []).filter((finding) => finding?.evidenceStatus === "contradicted");
+    add(
+      "no-false-contradiction",
+      contradicted.length === 0,
+      5,
+      contradicted.length === 0
+        ? "No finding marked contradicted without two sources in conflict."
+        : `Marked contradicted: ${contradicted.map((finding) => finding.id).join(", ")}`,
+      true,
+    );
+  }
+
   const forbiddenRecommendations = expectations.forbiddenRecommendationPatterns ?? [];
   const recommendationsClean = !containsAny(recommendationText, forbiddenRecommendations);
   add(

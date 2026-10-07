@@ -1,4 +1,4 @@
-import { HttpError } from "./errors.js";
+import { HttpError, SEARCH_UNSUPPORTED } from "./errors.js";
 import { fetchWithTimeout } from "./fetch-with-timeout.js";
 
 function apiKey() {
@@ -90,8 +90,14 @@ export async function callStructured(systemPrompt, userMessage, schema, toolName
 
 // Free-text output.
 export async function callText(systemPrompt, userMessage) {
+  return (await callTextDetailed(systemPrompt, userMessage)).text;
+}
+
+// Same as callText, but also reports whether the output hit the token limit.
+// chatCompletion already logs finish_reason=length; this surfaces it.
+export async function callTextDetailed(systemPrompt, userMessage, { maxTokens = 2048 } = {}) {
   const data = await chatCompletion({
-    max_tokens: 2048,
+    max_tokens: maxTokens,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userMessage },
@@ -103,7 +109,7 @@ export async function callText(systemPrompt, userMessage) {
     console.error("No content in response:", JSON.stringify(data));
     throw new Error("No response from AI");
   }
-  return text;
+  return { text, truncated: data.choices?.[0]?.finish_reason === "length" };
 }
 
 // Free-text output grounded in live web search.
@@ -117,13 +123,18 @@ export async function callText(systemPrompt, userMessage) {
 // second code path for a feature this app doesn't otherwise need. If
 // OPENAI_MODEL isn't a search-preview model, fail clearly instead of
 // silently skipping grounding.
+export function supportsWebSearch() {
+  return Boolean(process.env.OPENAI_MODEL?.includes("search-preview"));
+}
+
 export async function callTextWithSearch(systemPrompt, userMessage) {
-  if (!model().includes("search-preview")) {
+  if (!supportsWebSearch()) {
     throw new HttpError(
       `OPENAI_MODEL "${model()}" does not support web search. OpenAI's Chat Completions API only searches ` +
       `with a "-search-preview" model (e.g. gpt-4o-search-preview) — set OPENAI_MODEL to one of those, or switch ` +
       `AI_PROVIDER to anthropic or gemini, both of which support search on any configured model.`,
       400,
+      { code: SEARCH_UNSUPPORTED, publicMessage: "Web search isn't available with the AI provider this app is using." },
     );
   }
   return callText(systemPrompt, userMessage).then((text) => ({ text, sources: [] }));

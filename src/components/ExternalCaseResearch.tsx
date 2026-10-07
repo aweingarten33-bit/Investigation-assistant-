@@ -2,13 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ExternalLink, Globe2, RefreshCw, Search, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { callApi } from "@/lib/api";
+import { useWebSearchAvailable } from "@/lib/capabilities";
+import { useSessionState } from "@/lib/session-state";
 import type { Source } from "@/lib/types";
 
 type PublicResearchResponse = {
-  brief: string;
+  brief: string | null;
   profile: string | null;
   sources: Source[];
+  unavailable?: boolean;
 };
+
+// Fixed text only: server/provider error messages are never shown here.
+const RESEARCH_FAILED_MESSAGE = "Similar public cases couldn't be loaded right now. Please try again later.";
 
 export function ExternalCaseResearch({
   caseNotes,
@@ -26,16 +32,21 @@ export function ExternalCaseResearch({
   autoSearch?: boolean;
 }) {
   const [open, setOpen] = useState(true);
-  const [brief, setBrief] = useState<string | null>(initialBrief ?? null);
-  const [profile, setProfile] = useState<string | null>(initialProfile ?? null);
-  const [sources, setSources] = useState<Source[]>(initialSources);
+  // Results for these notes survive in-app navigation, so returning to the
+  // report neither loses them nor re-runs the search.
+  const researchKey = `research:${caseNotes?.trim() ?? ""}`;
+  const [saved, setSaved] = useSessionState<PublicResearchResponse | null>(researchKey, null);
+  const brief = saved?.brief ?? initialBrief ?? null;
+  const profile = saved?.profile ?? initialProfile ?? null;
+  const sources = saved?.sources ?? initialSources;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const ranForNotesRef = useRef<string | null>(null);
+  const ranForNotesRef = useRef<string | null>(saved ? caseNotes?.trim() ?? null : null);
+  const webSearch = useWebSearchAvailable();
 
   const runResearch = async () => {
     const notes = caseNotes?.trim();
-    if (!notes || notes.length < 20 || loading) return;
+    if (!notes || notes.length < 20 || loading || webSearch !== true) return;
 
     setLoading(true);
     setError(null);
@@ -45,21 +56,19 @@ export function ExternalCaseResearch({
       analysisSummary,
     });
 
-    if (apiError || !data) {
-      setError(apiError?.message || "Public case research was unavailable.");
+    if (apiError || !data || data.unavailable) {
+      setError(RESEARCH_FAILED_MESSAGE);
       setLoading(false);
       return;
     }
 
-    setBrief(data.brief);
-    setProfile(data.profile);
-    setSources(data.sources || []);
+    setSaved({ brief: data.brief, profile: data.profile, sources: data.sources || [] });
     setLoading(false);
   };
 
   useEffect(() => {
     const notes = caseNotes?.trim();
-    if (!autoSearch || !notes || notes.length < 20 || ranForNotesRef.current === notes) return;
+    if (!autoSearch || webSearch !== true || !notes || notes.length < 20 || ranForNotesRef.current === notes) return;
 
     // Debounce: caseNotes can change on every keystroke while the user is
     // still editing (e.g. the case-facts textarea in AIRecommendation).
@@ -72,9 +81,14 @@ export function ExternalCaseResearch({
     // runResearch intentionally depends on the current case inputs; this guard
     // prevents repeated provider/search calls during ordinary re-renders.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoSearch, caseNotes, analysisSummary]);
+  }, [autoSearch, caseNotes, analysisSummary, webSearch]);
 
   const hasContent = Boolean(brief || sources.length > 0);
+
+  // The configured AI provider can't search the web: hide the feature rather
+  // than offer a button that can only fail. Research already attached to the
+  // analysis (initialBrief/initialSources) is still shown.
+  if (webSearch === false && !hasContent) return null;
 
   return (
     <div className="rounded-xl border border-primary/20 bg-card overflow-hidden">
@@ -154,7 +168,7 @@ export function ExternalCaseResearch({
             <p className="text-xs text-muted-foreground">No public research has been run for this case yet.</p>
           )}
 
-          {caseNotes && (
+          {caseNotes && webSearch === true && (
             <Button type="button" variant="outline" onClick={runResearch} disabled={loading} className="h-9 text-xs">
               {loading ? <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Search className="h-3.5 w-3.5 mr-1.5" />}
               {hasContent ? "Refresh Similar-Case Research" : "Search Similar Public Cases"}

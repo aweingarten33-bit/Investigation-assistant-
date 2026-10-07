@@ -69,6 +69,9 @@ function EvidenceCard({ evidence }: { evidence: EvidenceItem }) {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 mb-1">
               <span className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">{evidence.id}</span>
+              {evidence.provenance === "investigator_summary" && (
+                <span className="text-[10px] rounded border px-1.5 py-0.5 font-medium border-warning/30 bg-warning/10 text-warning">investigator summary</span>
+              )}
               <span className={cn(
                 "text-[10px] rounded border px-1.5 py-0.5 font-medium",
                 evidence.stance === "supports" && "border-success/30 bg-success/10 text-success",
@@ -82,6 +85,9 @@ function EvidenceCard({ evidence }: { evidence: EvidenceItem }) {
             <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
               <Link2 className="h-3 w-3 shrink-0" /> {evidence.reference}
             </p>
+            {evidence.provenance === "investigator_summary" && (
+              <p className="text-[11px] text-warning mt-1">Per investigator summary{evidence.provenanceNote ? ` — ${evidence.provenanceNote}` : ""}</p>
+            )}
           </div>
         </div>
       </button>
@@ -116,6 +122,7 @@ export function EvidenceTraceability({
     for (const finding of findings) {
       for (const id of finding.supportingEvidenceIds) ids.add(id);
       for (const id of finding.contradictingEvidenceIds) ids.add(id);
+      for (const id of finding.contextEvidenceIds ?? []) ids.add(id);
     }
     return ids;
   }, [findings]);
@@ -145,7 +152,7 @@ export function EvidenceTraceability({
           <div>
             <p className="text-sm font-semibold text-foreground">Evidence Traceability</p>
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-              Each finding is linked to exact line ranges from the notes. Open a finding, then open any evidence item to see the source excerpt the server reconstructed from those lines. Contradictory evidence stays visible.
+              Each finding is linked to exact line ranges from the notes. Open a finding, then open any evidence item to see the source excerpt the server reconstructed from those lines. A finding is marked contradicted only when two different sources conflict on the same fact; both sides are quoted. Evidence that is only the investigator's summary of a record is labelled.
             </p>
           </div>
         </div>
@@ -161,6 +168,8 @@ export function EvidenceTraceability({
           const open = openFinding === finding.id;
           const supporting = finding.supportingEvidenceIds.map((id) => evidenceById.get(id)).filter(Boolean) as EvidenceItem[];
           const contradicting = finding.contradictingEvidenceIds.map((id) => evidenceById.get(id)).filter(Boolean) as EvidenceItem[];
+          const related = (finding.contextEvidenceIds ?? []).map((id) => evidenceById.get(id)).filter(Boolean) as EvidenceItem[];
+          const conflicts = (finding.conflicts ?? []).filter((conflict) => evidenceById.has(conflict.supportingEvidenceId) && evidenceById.has(conflict.contradictingEvidenceId));
           return (
             <div key={finding.id} className="rounded-xl border border-border bg-card overflow-hidden">
               <button
@@ -202,6 +211,28 @@ export function EvidenceTraceability({
                     </div>
                   </div>
 
+                  {conflicts.length > 0 && (
+                    <div className="space-y-2">
+                      {conflicts.map((conflict) => {
+                        const a = evidenceById.get(conflict.supportingEvidenceId)!;
+                        const b = evidenceById.get(conflict.contradictingEvidenceId)!;
+                        return (
+                          <div key={`${conflict.supportingEvidenceId}-${conflict.contradictingEvidenceId}`} className="rounded-lg border border-orange-500/30 bg-orange-500/5 p-3">
+                            <p className="text-[10px] uppercase tracking-wide font-semibold text-orange-600 mb-2">Conflict: {conflict.point}</p>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              {[a, b].map((item) => (
+                                <div key={item.id} className="rounded-md bg-background border border-border p-2">
+                                  <p className="text-[10px] font-semibold text-muted-foreground mb-1">{item.reference}</p>
+                                  <blockquote className="text-xs text-foreground italic leading-relaxed">“{item.excerpt || item.summary}”</blockquote>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   <div>
                     <div className="flex items-center gap-1.5 mb-2">
                       <AlertTriangle className="h-3.5 w-3.5 text-orange-600" />
@@ -209,9 +240,22 @@ export function EvidenceTraceability({
                     </div>
                     <div className="space-y-2">
                       {contradicting.map((item) => <EvidenceCard key={item.id} evidence={item} />)}
-                      {contradicting.length === 0 && <p className="text-xs text-muted-foreground">No contradictory evidence is mapped to this finding.</p>}
+                      {contradicting.length === 0 && <p className="text-xs text-muted-foreground">No other source gives a conflicting account of this finding's facts.</p>}
                     </div>
                   </div>
+
+                  {related.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        <p className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">Related statements (not a factual conflict) — {related.length}</p>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mb-2 leading-relaxed">For example, a denial of intent or motive that doesn't dispute the act itself.</p>
+                      <div className="space-y-2">
+                        {related.map((item) => <EvidenceCard key={item.id} evidence={item} />)}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

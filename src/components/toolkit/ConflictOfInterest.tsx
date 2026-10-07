@@ -184,12 +184,14 @@ const COI_INTERVIEW_SECTIONS = [
     content: `Thanks for meeting with me. I'm reviewing a potential conflict of interest matter.
 
 • This is an internal review — I'm gathering facts.
-• This is confidential — don't discuss with coworkers.
+• [If your policy and counsel support it:] I'm asking you to be discreet about the details of this review while it's open. [State the specific reason.]
 • There's no presumption of wrongdoing. Many COIs can be managed once identified.
 • Your cooperation is expected.
 • Be completely truthful — failing to disclose is itself a violation.
 
-Do you understand? Any questions?`,
+Do you understand? Any questions?
+
+[Confidentiality is a judgment call, not a standard order. Avoid a blanket instruction not to discuss the matter with coworkers: in the U.S., blanket gag instructions to non-supervisory employees can conflict with NLRA Section 7 rights, and some state laws and union contracts limit them further. Check your policy and counsel for the wording to use.]`,
   },
   {
     heading: "Disclosure & Awareness",
