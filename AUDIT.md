@@ -8,7 +8,7 @@ This repository is optimized as a **personal Compliance & Privacy Investigation 
 
 The primary workflow is:
 
-1. paste or upload de-identified investigation notes;
+1. upload de-identified investigation notes (Word or PDF);
 2. map findings to exact source lines;
 3. surface supporting and contradictory evidence;
 4. assess substantiated / unsubstantiated / needs more information;

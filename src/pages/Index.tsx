@@ -18,7 +18,7 @@ import {
   EMPTY_ORGANIZATION_DISCIPLINE_CONFIG,
   type OrganizationDisciplineConfig,
 } from "@/lib/organization-context";
-import { SAMPLE_REPORT_TEXT } from "@/lib/sample-report";
+import { SAMPLE_REPORT_FILENAME, SAMPLE_REPORT_TEXT } from "@/lib/sample-report";
 import { suggestLetterType, buildLetterPrefillDetails, letterButtonLabel } from "@/lib/letter-prefill";
 import {
   Loader2, Download, Sparkles, FileText, RotateCcw, XCircle,
@@ -51,6 +51,7 @@ const Index = () => {
   const [classifySummary, setClassifySummary] = useState<ClassifySummary | null>(null);
   const [result, setResult] = useSessionState<AnalysisResult | null>("index.result", null);
   const runIdRef = useRef(0);
+  const uploadRunRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
 
   // Leaving the page mid-analysis cancels the run (its result would have
@@ -76,6 +77,7 @@ const Index = () => {
 
   const handleReset = useCallback(() => {
     invalidateRun();
+    uploadRunRef.current++;
     setReportText("");
     setOrganizationConfig({ ...EMPTY_ORGANIZATION_DISCIPLINE_CONFIG });
     setShowOrgContext(false);
@@ -109,63 +111,71 @@ const Index = () => {
       return;
     }
 
-    try {
-      const chunks: string[] = [];
-      const unreadablePdfs: string[] = [];
+    // Only the latest upload may update the page or show a toast. A second,
+    // overlapping run (e.g. a re-triggered file picker) used to report its own
+    // failure after an upload that had actually succeeded.
+    const uploadId = ++uploadRunRef.current;
+    const chunks: string[] = [];
+    const unreadablePdfs: string[] = [];
+    const failedFiles: string[] = [];
 
-      for (const file of selected) {
-        const lower = file.name.toLowerCase();
-        let value = "";
+    for (const file of selected) {
+      const lower = file.name.toLowerCase();
+      let value = "";
 
+      // Only extraction itself can produce an extraction-failure message.
+      try {
         if (lower.endsWith(".docx")) {
           value = await extractDocxText(file);
         } else {
           value = await extractPdfText(file);
           if (!value.trim()) unreadablePdfs.push(file.name);
         }
-
-        const sourceName = file.name.replace(/\s+/g, " ").trim();
-        const normalized = value.replace(/\r\n/g, "\n").trim();
-        if (!normalized) continue;
-
-        const labeled = normalized
-          .split("\n")
-          .map((line) => `[Source: ${sourceName}] ${line}`.trimEnd())
-          .join("\n");
-        chunks.push(labeled);
+      } catch (error) {
+        console.error(`Text extraction failed for ${file.name}:`, error);
+        failedFiles.push(file.name);
+        continue;
       }
+      if (uploadRunRef.current !== uploadId) return;
 
-      if (!chunks.length) {
-        toast.error("No readable text was found. Scanned/image-only PDFs need OCR before they can be analyzed.");
-        return;
-      }
+      const sourceName = file.name.replace(/\s+/g, " ").trim();
+      const normalized = value.replace(/\r\n/g, "\n").trim();
+      if (!normalized) continue;
 
-      if (unreadablePdfs.length) {
-        toast.warning(`No selectable text was found in: ${unreadablePdfs.join(", ")}. Those PDF(s) were skipped.`);
-      }
-
-      setReportText(chunks.join("\n\n"));
-      const names = selected.map((file) => file.name);
-      setFileName(names.length === 1 ? names[0] : `${names.length} source files: ${names.slice(0, 3).join(", ")}${names.length > 3 ? "…" : ""}`);
-      setFileSize(formatSize(totalBytes));
-      setIsSample(false);
-      setResult(null);
-    } catch {
-      toast.error("Failed to extract text from one or more DOCX/PDF source files.");
+      const labeled = normalized
+        .split("\n")
+        .map((line) => `[Source: ${sourceName}] ${line}`.trimEnd())
+        .join("\n");
+      chunks.push(labeled);
     }
-  }, [setFileName, setFileSize, setIsSample, setReportText, setResult]);
+    if (uploadRunRef.current !== uploadId) return;
 
-  const handleTextChange = useCallback((text: string) => {
-    setReportText(text);
-    setFileName(null);
-    setFileSize(null);
+    if (!chunks.length) {
+      toast.error(failedFiles.length
+        ? `Couldn't read ${failedFiles.join(", ")}. Check the file opens in Word or a PDF viewer and try again.`
+        : "No readable text was found. Scanned/image-only PDFs need OCR before they can be analyzed.");
+      return;
+    }
+
+    if (failedFiles.length) {
+      toast.warning(`Couldn't read ${failedFiles.join(", ")}; ${failedFiles.length === 1 ? "it was" : "they were"} skipped. The other files loaded.`);
+    }
+    if (unreadablePdfs.length) {
+      toast.warning(`No selectable text was found in: ${unreadablePdfs.join(", ")}. Those PDF(s) were skipped.`);
+    }
+
+    const loaded = selected.filter((file) => !failedFiles.includes(file.name)).map((file) => file.name);
+    setReportText(chunks.join("\n\n"));
+    setFileName(loaded.length === 1 ? loaded[0] : `${loaded.length} source files: ${loaded.slice(0, 3).join(", ")}${loaded.length > 3 ? "…" : ""}`);
+    setFileSize(formatSize(totalBytes));
     setIsSample(false);
     setResult(null);
   }, [setFileName, setFileSize, setIsSample, setReportText, setResult]);
 
   const handleUseSample = useCallback(() => {
+    uploadRunRef.current++;
     setReportText(SAMPLE_REPORT_TEXT);
-    setFileName(null);
+    setFileName(SAMPLE_REPORT_FILENAME);
     setFileSize(null);
     setIsSample(true);
     setResult(null);
@@ -357,7 +367,7 @@ const Index = () => {
                   <HomeToolkitMenuButton />
                   <h1 className="text-base sm:text-xl font-bold text-foreground mb-0.5">Compliance & Privacy Investigation Assistant</h1>
                 </div>
-                <p className="text-xs sm:text-sm text-muted-foreground leading-snug">Paste notes or upload DOCX/PDF investigation sources to map the evidence, identify contradictions, assess the finding, generate the report, and tell you exactly what to investigate next.</p>
+                <p className="text-xs sm:text-sm text-muted-foreground leading-snug">Upload your investigation notes (Word or PDF). It maps every fact to its source, flags contradictions, weighs the evidence, and writes the report — with citations for every line.</p>
                 <PiiReminder />
               </div>
 
@@ -378,13 +388,13 @@ const Index = () => {
               </div>
 
               <div className="p-4 sm:p-5">
-                <UploadZone fileName={fileName} fileSize={fileSize} isSample={isSample} pastedText={reportText} onFileSelect={handleFileSelect} onTextChange={handleTextChange} onClear={handleReset} />
+                <UploadZone fileName={fileName} fileSize={fileSize} isSample={isSample} onFileSelect={handleFileSelect} onClear={handleReset} />
               </div>
 
               <div className="border-t border-border">
                 <button type="button" onClick={() => setShowOrgContext((value) => !value)} className="w-full px-5 py-3 flex items-center gap-2 text-left hover:bg-muted/20 transition-colors">
                   <Building2 className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-xs font-medium text-foreground flex-1">Optional policy / discipline context</span>
+                  <span className="text-xs font-medium text-foreground flex-1">Optional: add your policy or discipline matrix — it weighs corrective action against it.</span>
                   <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showOrgContext ? "rotate-180" : ""}`} />
                 </button>
                 {showOrgContext && (
@@ -418,7 +428,7 @@ const Index = () => {
                 <Button onClick={handleCancel} variant="ghost" className="w-full h-9 text-sm text-muted-foreground hover:text-destructive"><XCircle className="mr-2 h-4 w-4" />Cancel</Button>
               )}
 
-              {!hasContent && !isAnalyzing && <p className="text-xs text-muted-foreground text-center">Paste notes or upload one or more DOCX/PDF source files to get started</p>}
+              {!hasContent && !isAnalyzing && <p className="text-xs text-muted-foreground text-center">Upload a Word or PDF file to get started.</p>}
             </div>
 
             <ContinueFromExport />

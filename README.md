@@ -8,7 +8,7 @@ This is intentionally **decision support, not an automated employment decision-m
 
 The main flow is intentionally simple:
 
-1. **Paste investigation notes or upload a `.docx`.**
+1. **Upload your investigation notes as Word (`.docx`) or PDF files.**
 2. The server converts the notes into immutable numbered lines (`[L0001]`, `[L0002]`, ...).
 3. The AI builds an **evidence map** using only those source-line references.
 4. The server reconstructs every displayed evidence excerpt from the original submitted lines — the model does not get to invent its own quote/citation.

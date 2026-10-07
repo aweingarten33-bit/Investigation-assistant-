@@ -5,12 +5,14 @@ import Index from "./Index";
 import Toolkit from "./Toolkit";
 import { callApi } from "@/lib/api";
 import { resetCapabilitiesForTests } from "@/lib/capabilities";
+import { extractDocxText } from "@/lib/file-text";
 import type { AnalysisResult } from "@/lib/types";
 
 vi.mock("@/lib/api", () => ({ callApi: vi.fn() }));
-// pdf.js needs browser APIs jsdom lacks; file upload isn't exercised here.
+// pdf.js needs browser APIs jsdom lacks; extraction is mocked.
 vi.mock("@/lib/file-text", () => ({ extractDocxText: vi.fn(), extractPdfText: vi.fn() }));
 const mockedCallApi = vi.mocked(callApi);
+const mockedExtractDocx = vi.mocked(extractDocxText);
 
 const NOTES = "Case #2026-0412\nCharge Nurse A reported that Employee B opened a coworker's chart without a work reason on 3/10.";
 
@@ -52,6 +54,8 @@ const PLAN = {
 
 beforeEach(() => {
   resetCapabilitiesForTests();
+  mockedExtractDocx.mockReset();
+  mockedExtractDocx.mockResolvedValue(NOTES);
   mockedCallApi.mockReset();
   mockedCallApi.mockImplementation(async (_route, body) => {
     const payload = body as { mode?: string; step?: string };
@@ -62,6 +66,11 @@ beforeEach(() => {
     return { data: null, error: new Error("unexpected call") } as never;
   });
 });
+
+async function uploadNotes() {
+  fireEvent.change(screen.getByTestId("source-file-input"), { target: { files: [new File(["x"], "notes.docx")] } });
+  expect(await screen.findByText("notes.docx")).toBeInTheDocument();
+}
 
 function renderApp() {
   render(
@@ -85,16 +94,17 @@ async function visitInterviewTemplatesAndComeBack() {
 }
 
 describe("internal navigation keeps the session's work", () => {
-  it("keeps pasted notes", async () => {
+  it("keeps the uploaded notes", async () => {
     renderApp();
-    fireEvent.change(screen.getByPlaceholderText(/Type or paste your investigation notes/), { target: { value: NOTES } });
+    await uploadNotes();
     await visitInterviewTemplatesAndComeBack();
-    expect(await screen.findByPlaceholderText(/Type or paste your investigation notes/)).toHaveValue(NOTES);
+    expect(await screen.findByText("notes.docx")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Analyze" })).toBeEnabled();
   });
 
   it("keeps the completed report and the generated plan", async () => {
     renderApp();
-    fireEvent.change(screen.getByPlaceholderText(/Type or paste your investigation notes/), { target: { value: NOTES } });
+    await uploadNotes();
     fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
     expect(await screen.findByText("Distinctive conclusion of the finished report.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Build My Next Steps/ }));
@@ -111,7 +121,7 @@ describe("internal navigation keeps the session's work", () => {
 
   it("asks before New Analysis discards a finished report", async () => {
     renderApp();
-    fireEvent.change(screen.getByPlaceholderText(/Type or paste your investigation notes/), { target: { value: NOTES } });
+    await uploadNotes();
     fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
     await screen.findByText("Distinctive conclusion of the finished report.");
 
@@ -130,7 +140,7 @@ describe("reload/close warning", () => {
     window.dispatchEvent(before);
     expect(before.defaultPrevented).toBe(false);
 
-    fireEvent.change(screen.getByPlaceholderText(/Type or paste your investigation notes/), { target: { value: NOTES } });
+    await uploadNotes();
     await waitFor(() => {
       const after = new Event("beforeunload", { cancelable: true });
       window.dispatchEvent(after);
